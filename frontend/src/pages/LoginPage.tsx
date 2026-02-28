@@ -22,6 +22,7 @@ export default function LoginPage() {
       const res = await authAPI.login({ email, password })
       const { token, role } = res.data
 
+      localStorage.setItem('token', token)
       const meRes = await authAPI.getMe()
       setAuth(token, { ...meRes.data })
 
