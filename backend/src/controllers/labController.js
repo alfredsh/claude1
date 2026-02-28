@@ -1,5 +1,22 @@
+const path = require('path');
+const fs = require('fs');
 const prisma = require('../config/database');
 const { getAIClient, AI_MODEL, SYSTEM_PROMPTS } = require('../config/ai');
+
+const extractPdfText = async (fileUrl) => {
+  if (!fileUrl || !fileUrl.toLowerCase().endsWith('.pdf')) return '';
+  try {
+    const filePath = path.join(process.cwd(), fileUrl.startsWith('/') ? fileUrl.slice(1) : fileUrl);
+    if (!fs.existsSync(filePath)) return '';
+    const pdfParse = require('pdf-parse');
+    const buffer = fs.readFileSync(filePath);
+    const data = await pdfParse(buffer);
+    return data.text ? data.text.substring(0, 4000) : '';
+  } catch (err) {
+    console.error('PDF extraction error:', err.message);
+    return '';
+  }
+};
 
 const uploadLabResult = async (req, res) => {
   try {
@@ -57,14 +74,19 @@ const interpretLabResultAI = async (labResult, profile) => {
       .map((p) => `${p.name}: ${p.value} ${p.unit} (норма: ${p.normalMin}-${p.normalMax}, статус: ${p.status})`)
       .join('\n');
 
+    const pdfText = await extractPdfText(labResult.fileUrl);
+
+    let userContent = `Интерпретируй результаты анализа "${labResult.testName}":\n\n`;
+    if (paramsSummary) userContent += `Параметры:\n${paramsSummary}\n\n`;
+    if (pdfText) userContent += `Содержимое документа:\n${pdfText}\n\n`;
+    if (!paramsSummary && !pdfText) userContent += 'Данные анализа не предоставлены.\n\n';
+    userContent += 'Дай краткое объяснение для пациента и рекомендации.';
+
     const completion = await ai.chat.completions.create({
       model: AI_MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPTS.labAnalysis },
-        {
-          role: 'user',
-          content: `Интерпретируй результаты анализа "${labResult.testName}":\n\n${paramsSummary}\n\nДай краткое объяснение для пациента и рекомендации.`,
-        },
+        { role: 'user', content: userContent },
       ],
       max_tokens: 800,
     });

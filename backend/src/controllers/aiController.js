@@ -115,6 +115,17 @@ const buildPatientContext = (profile) => {
     lines.push(`Текущие добавки: ${profile.supplements.map((s) => `${s.name} (${s.dosage})`).join(', ')}`);
   }
 
+  if (profile.labResults?.length) {
+    const labLines = profile.labResults.map((lab) => {
+      const dateStr = new Date(lab.testDate).toLocaleDateString('ru-RU');
+      const params = lab.parameters?.length
+        ? lab.parameters.map((p) => `${p.name}: ${p.value} ${p.unit} (${p.status})`).join(', ')
+        : 'параметры не введены';
+      return `  - ${lab.testName} (${dateStr}): ${params}`;
+    });
+    lines.push(`Последние анализы:\n${labLines.join('\n')}`);
+  }
+
   return lines.join('\n');
 };
 
