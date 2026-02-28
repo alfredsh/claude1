@@ -130,8 +130,8 @@ git push -u origin main
 
 1. `New +` → `Web Service` → выберите репозиторий
 2. Root Directory: `backend`
-3. Build Command: `npm install && npx prisma generate && npx prisma migrate deploy`
-4. Start Command: `node src/utils/seed.js 2>/dev/null; node src/app.js`
+3. Build Command: `npm install && npx prisma generate && npx prisma db push`
+4. Start Command: `node src/utils/seed.js; node src/app.js`
 5. Environment Variables:
 
 | Ключ | Значение |

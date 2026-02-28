@@ -12,6 +12,10 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const httpServer = createServer(app);
 
+// Trust proxy — required for Render.com, Heroku, and other PaaS behind load balancers
+// This fixes X-Forwarded-For header handling for express-rate-limit
+app.set('trust proxy', 1);
+
 // Socket.IO for real-time messaging
 const io = new Server(httpServer, {
   cors: {
