@@ -16,4 +16,4 @@ RUN mkdir -p uploads
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node src/utils/seed.js 2>/dev/null || true && node src/app.js"]
+CMD ["sh", "-c", "npx prisma db push && node src/utils/seed.js; node src/app.js"]
