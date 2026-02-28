@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { FlaskConical, Upload, ChevronDown, ChevronUp, Brain, Plus, Loader2, Trash2 } from 'lucide-react'
+import { FlaskConical, Upload, ChevronDown, ChevronUp, Brain, Plus, Loader2, Trash2, Sparkles, FileText } from 'lucide-react'
 import { formatDate, getStatusColor, getStatusLabel } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 
@@ -17,6 +17,8 @@ export default function LabResults() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [form, setForm] = useState({ testName: '', testDate: '', parameters: '' })
   const [file, setFile] = useState<File | null>(null)
+
+  const isPdf = file?.name.toLowerCase().endsWith('.pdf') ?? false
 
   const { data: results = [] } = useQuery({
     queryKey: ['lab-results'],
@@ -43,6 +45,29 @@ export default function LabResults() {
       toast({ title: 'Ошибка удаления', variant: 'destructive' })
     } finally {
       setDeleting(null)
+    }
+  }
+
+  const handleSmartParse = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!file) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await labAPI.parsePdf(fd)
+      qc.invalidateQueries({ queryKey: ['lab-results'] })
+      setShowForm(false)
+      setForm({ testName: '', testDate: '', parameters: '' })
+      setFile(null)
+      toast({
+        title: `Найдено ${res.data.count} типов анализов!`,
+        description: 'ИИ создал записи и начал интерпретацию',
+      })
+    } catch (err: any) {
+      toast({ title: 'Ошибка разбора PDF', description: err.response?.data?.error, variant: 'destructive' })
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -83,42 +108,94 @@ export default function LabResults() {
 
       {showForm && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><Upload className="w-5 h-5" /> Загрузить анализ</CardTitle></CardHeader>
-          <CardContent>
-            <form onSubmit={handleUpload} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1.5">Название анализа *</label>
-                  <Input placeholder="Общий анализ крови" value={form.testName} onChange={(e) => setForm(f => ({ ...f, testName: e.target.value }))} required />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Upload className="w-5 h-5" /> Загрузить анализ
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* File picker always shown first */}
+            <div>
+              <label className="block text-sm font-medium mb-1.5">Файл анализа (PDF, JPG)</label>
+              <Input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+              />
+            </div>
+
+            {/* Smart PDF mode */}
+            {isPdf ? (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-blue-700">
+                  <Sparkles className="w-4 h-4" />
+                  <span className="text-sm font-semibold">Умный разбор PDF</span>
+                </div>
+                <p className="text-sm text-blue-600">
+                  ИИ автоматически распознает все типы анализов (кровь, моча, гормоны и др.),
+                  даты и показатели — и создаст отдельные записи для каждого типа.
+                </p>
+                <form onSubmit={handleSmartParse} className="flex gap-3">
+                  <Button type="submit" variant="gradient" loading={uploading} className="gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    {uploading ? 'Распознаю...' : 'Автоматически распознать'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Отмена</Button>
+                </form>
+              </div>
+            ) : (
+              /* Manual entry mode for non-PDF */
+              <form onSubmit={handleUpload} className="space-y-4">
+                <div className="flex items-center gap-2 text-slate-500 text-sm">
+                  <FileText className="w-4 h-4" />
+                  Ручной ввод параметров
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Название анализа *</label>
+                    <Input
+                      placeholder="Общий анализ крови"
+                      value={form.testName}
+                      onChange={(e) => setForm(f => ({ ...f, testName: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Дата анализа *</label>
+                    <Input
+                      type="date"
+                      value={form.testDate}
+                      onChange={(e) => setForm(f => ({ ...f, testDate: e.target.value }))}
+                      required
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Дата анализа *</label>
-                  <Input type="date" value={form.testDate} onChange={(e) => setForm(f => ({ ...f, testDate: e.target.value }))} required />
+                  <label className="block text-sm font-medium mb-1.5">
+                    Параметры (JSON)
+                    <button
+                      type="button"
+                      className="ml-2 text-xs text-primary hover:underline"
+                      onClick={() => setForm(f => ({ ...f, parameters: SAMPLE_PARAMS }))}
+                    >
+                      Вставить пример
+                    </button>
+                  </label>
+                  <textarea
+                    className="w-full h-32 rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder={`[\n  {"name":"Гемоглобин","value":135,"unit":"г/л","normalMin":130,"normalMax":160}\n]`}
+                    value={form.parameters}
+                    onChange={(e) => setForm(f => ({ ...f, parameters: e.target.value }))}
+                  />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1.5">
-                  Параметры (JSON формат)
-                  <button type="button" className="ml-2 text-xs text-primary hover:underline" onClick={() => setForm(f => ({ ...f, parameters: SAMPLE_PARAMS }))}>
-                    Вставить пример
-                  </button>
-                </label>
-                <textarea className="w-full h-32 rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder={`[\n  {"name":"Гемоглобин","value":135,"unit":"г/л","normalMin":130,"normalMax":160}\n]`} value={form.parameters} onChange={(e) => setForm(f => ({ ...f, parameters: e.target.value }))} />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1.5">Файл анализа (PDF, JPG)</label>
-                <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-              </div>
-
-              <div className="flex gap-3">
-                <Button type="submit" variant="gradient" loading={uploading} className="gap-2">
-                  <Upload className="w-4 h-4" /> Загрузить
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Отмена</Button>
-              </div>
-            </form>
+                <div className="flex gap-3">
+                  <Button type="submit" variant="gradient" loading={uploading} className="gap-2">
+                    <Upload className="w-4 h-4" /> Загрузить
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Отмена</Button>
+                </div>
+              </form>
+            )}
           </CardContent>
         </Card>
       )}
@@ -140,7 +217,10 @@ export default function LabResults() {
 
             return (
               <Card key={result.id} className="overflow-hidden">
-                <div className="p-5 cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => setExpanded(isExpanded ? null : result.id)}>
+                <div
+                  className="p-5 cursor-pointer hover:bg-slate-50 transition-colors"
+                  onClick={() => setExpanded(isExpanded ? null : result.id)}
+                >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center flex-shrink-0">
@@ -153,9 +233,14 @@ export default function LabResults() {
                           {abnormal.length > 0 && (
                             <Badge variant="danger" className="text-xs">⚠️ {abnormal.length} отклонений</Badge>
                           )}
-                          <Badge variant={result.status === 'completed' ? 'success' : result.status === 'processing' ? 'warning' : 'outline'} className="text-xs">
+                          <Badge
+                            variant={result.status === 'completed' ? 'success' : result.status === 'processing' ? 'warning' : 'outline'}
+                            className="text-xs"
+                          >
                             {result.status === 'completed' ? '✓ Обработан' : result.status === 'processing' ? (
-                              <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Обрабатывается</span>
+                              <span className="flex items-center gap-1">
+                                <Loader2 className="w-3 h-3 animate-spin" /> Обрабатывается
+                              </span>
                             ) : 'Ошибка'}
                           </Badge>
                         </div>
@@ -187,7 +272,9 @@ export default function LabResults() {
                             <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl border ${getStatusColor(p.status)}`}>
                               <div>
                                 <p className="font-medium text-sm">{p.name}</p>
-                                {p.normalMin !== null && <p className="text-xs opacity-70">Норма: {p.normalMin}–{p.normalMax} {p.unit}</p>}
+                                {p.normalMin !== null && (
+                                  <p className="text-xs opacity-70">Норма: {p.normalMin}–{p.normalMax} {p.unit}</p>
+                                )}
                               </div>
                               <div className="text-right">
                                 <p className="font-bold">{p.value} {p.unit}</p>

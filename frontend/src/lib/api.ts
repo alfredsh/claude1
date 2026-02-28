@@ -51,6 +51,9 @@ export const labAPI = {
   upload: (data: FormData) => api.post('/lab/upload', data, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
+  parsePdf: (data: FormData) => api.post('/lab/parse-pdf', data, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
   getAll: () => api.get('/lab'),
   getOne: (id: string) => api.get(`/lab/${id}`),
   delete: (id: string) => api.delete(`/lab/${id}`),
