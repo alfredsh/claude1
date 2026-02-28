@@ -138,4 +138,27 @@ const getLabResult = async (req, res) => {
   }
 };
 
-module.exports = { uploadLabResult, getLabResults, getLabResult };
+const deleteLabResult = async (req, res) => {
+  try {
+    const profile = await prisma.patientProfile.findUnique({ where: { userId: req.user.id } });
+    if (!profile) return res.status(404).json({ error: 'Профиль не найден' });
+
+    const result = await prisma.labResult.findFirst({
+      where: { id: req.params.id, patientId: profile.id },
+    });
+    if (!result) return res.status(404).json({ error: 'Анализ не найден' });
+
+    if (result.fileUrl) {
+      const filePath = path.join(process.cwd(), result.fileUrl.startsWith('/') ? result.fileUrl.slice(1) : result.fileUrl);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
+    await prisma.labResult.delete({ where: { id: result.id } });
+    res.json({ message: 'Анализ удалён' });
+  } catch (err) {
+    console.error('Delete lab error:', err);
+    res.status(500).json({ error: 'Ошибка удаления анализа' });
+  }
+};
+
+module.exports = { uploadLabResult, getLabResults, getLabResult, deleteLabResult };
