@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { FlaskConical, Upload, ChevronDown, ChevronUp, Brain, Plus, Loader2 } from 'lucide-react'
+import { FlaskConical, Upload, ChevronDown, ChevronUp, Brain, Plus, Loader2, Trash2 } from 'lucide-react'
 import { formatDate, getStatusColor, getStatusLabel } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 
@@ -14,6 +14,7 @@ export default function LabResults() {
   const [showForm, setShowForm] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [form, setForm] = useState({ testName: '', testDate: '', parameters: '' })
   const [file, setFile] = useState<File | null>(null)
 
@@ -28,6 +29,22 @@ export default function LabResults() {
     { name: 'Холестерин', value: 5.8, unit: 'ммоль/л', normalMin: 0, normalMax: 5.2 },
     { name: 'Глюкоза', value: 5.0, unit: 'ммоль/л', normalMin: 3.9, normalMax: 6.1 },
   ], null, 2)
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('Удалить этот анализ?')) return
+    setDeleting(id)
+    try {
+      await labAPI.delete(id)
+      qc.invalidateQueries({ queryKey: ['lab-results'] })
+      if (expanded === id) setExpanded(null)
+      toast({ title: 'Анализ удалён' })
+    } catch {
+      toast({ title: 'Ошибка удаления', variant: 'destructive' })
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -144,7 +161,19 @@ export default function LabResults() {
                         </div>
                       </div>
                     </div>
-                    {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={(e) => handleDelete(result.id, e)}
+                        disabled={deleting === result.id}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        title="Удалить анализ"
+                      >
+                        {deleting === result.id
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Trash2 className="w-4 h-4" />}
+                      </button>
+                      {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+                    </div>
                   </div>
                 </div>
 
