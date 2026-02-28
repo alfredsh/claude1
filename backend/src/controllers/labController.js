@@ -138,6 +138,111 @@ const getLabResult = async (req, res) => {
   }
 };
 
+const parsePdfLabResults = async (req, res) => {
+  try {
+    const profile = await prisma.patientProfile.findUnique({ where: { userId: req.user.id } });
+    if (!profile) return res.status(404).json({ error: 'Профиль не найден' });
+    if (!req.file) return res.status(400).json({ error: 'Файл не загружен' });
+
+    const fileUrl = `/uploads/${req.user.id}/${req.file.filename}`;
+    const filePath = path.join(process.cwd(), fileUrl.slice(1));
+
+    let pdfText = '';
+    try {
+      const pdfParse = require('pdf-parse');
+      const buffer = fs.readFileSync(filePath);
+      const data = await pdfParse(buffer);
+      pdfText = (data.text || '').trim();
+    } catch (err) {
+      console.error('PDF read error:', err.message);
+      return res.status(422).json({ error: 'Не удалось прочитать PDF. Возможно, это скан-изображение.' });
+    }
+
+    if (!pdfText) {
+      return res.status(422).json({ error: 'PDF не содержит текста. Загрузите текстовый PDF, не скан.' });
+    }
+
+    const ai = getAIClient();
+    const completion = await ai.chat.completions.create({
+      model: AI_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: 'Ты медицинский ИИ. Извлекай лабораторные показатели из текста документов и возвращай ТОЛЬКО валидный JSON без пояснений.',
+        },
+        {
+          role: 'user',
+          content: `Извлеки ВСЕ лабораторные анализы из текста. Раздели по типам (ОАК, биохимия крови, ОАМ, гормоны, коагулограмма и т.д.). Используй дату из документа (формат YYYY-MM-DD), если не найдена — "${new Date().toISOString().slice(0, 10)}".
+
+Верни JSON строго в формате:
+{
+  "results": [
+    {
+      "testName": "Общий анализ крови",
+      "testDate": "YYYY-MM-DD",
+      "parameters": [
+        {"name": "Гемоглобин", "value": 135.0, "unit": "г/л", "normalMin": 120.0, "normalMax": 160.0}
+      ]
+    }
+  ]
+}
+
+Правила: value — число (float), пропусти показатель если не число; normalMin/normalMax — число или null.
+
+Текст документа:
+${pdfText.substring(0, 10000)}`,
+        },
+      ],
+      max_tokens: 4000,
+      response_format: { type: 'json_object' },
+    });
+
+    let parsed;
+    try {
+      parsed = JSON.parse(completion.choices[0].message.content);
+    } catch {
+      return res.status(500).json({ error: 'ИИ вернул некорректный ответ. Попробуйте ещё раз.' });
+    }
+
+    const resultsData = parsed.results || parsed.labResults || [];
+    if (!resultsData.length) {
+      return res.status(422).json({ error: 'Анализы в документе не обнаружены. Проверьте формат PDF.' });
+    }
+
+    const created = [];
+    for (const r of resultsData) {
+      const params = (r.parameters || []).filter((p) => typeof p.value === 'number' && !isNaN(p.value));
+      const labResult = await prisma.labResult.create({
+        data: {
+          patientId: profile.id,
+          testName: r.testName || 'Анализ из PDF',
+          testDate: new Date(r.testDate || Date.now()),
+          fileUrl,
+          status: 'processing',
+          parameters: {
+            create: params.map((p) => ({
+              name: p.name,
+              value: parseFloat(p.value),
+              unit: p.unit || '',
+              normalMin: p.normalMin != null ? parseFloat(p.normalMin) : null,
+              normalMax: p.normalMax != null ? parseFloat(p.normalMax) : null,
+              status: getParameterStatus(parseFloat(p.value), p.normalMin, p.normalMax),
+            })),
+          },
+        },
+        include: { parameters: true },
+      });
+      created.push(labResult);
+      interpretLabResultAI(labResult, profile).catch(console.error);
+    }
+
+    res.status(201).json({ count: created.length, results: created });
+  } catch (err) {
+    console.error('Parse PDF error:', err);
+    res.status(500).json({ error: 'Ошибка автоматической обработки PDF' });
+  }
+};
+
 const deleteLabResult = async (req, res) => {
   try {
     const profile = await prisma.patientProfile.findUnique({ where: { userId: req.user.id } });
@@ -161,4 +266,4 @@ const deleteLabResult = async (req, res) => {
   }
 };
 
-module.exports = { uploadLabResult, getLabResults, getLabResult, deleteLabResult };
+module.exports = { uploadLabResult, getLabResults, getLabResult, deleteLabResult, parsePdfLabResults };
