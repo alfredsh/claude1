@@ -18,7 +18,9 @@ export default function LabResults() {
   const [form, setForm] = useState({ testName: '', testDate: '', parameters: '' })
   const [file, setFile] = useState<File | null>(null)
 
-  const isPdf = file?.name.toLowerCase().endsWith('.pdf') ?? false
+  const isSmartFile = file
+    ? ['.pdf', '.jpg', '.jpeg', '.png'].some(ext => file.name.toLowerCase().endsWith(ext))
+    : false
 
   const { data: results = [] } = useQuery({
     queryKey: ['lab-results'],
@@ -124,16 +126,19 @@ export default function LabResults() {
               />
             </div>
 
-            {/* Smart PDF mode */}
-            {isPdf ? (
+            {/* Smart parse mode — PDF or image */}
+            {isSmartFile ? (
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-3">
                 <div className="flex items-center gap-2 text-blue-700">
                   <Sparkles className="w-4 h-4" />
-                  <span className="text-sm font-semibold">Умный разбор PDF</span>
+                  <span className="text-sm font-semibold">
+                    {file?.name.toLowerCase().endsWith('.pdf') ? 'Умный разбор PDF' : 'Умное распознавание изображения'}
+                  </span>
                 </div>
                 <p className="text-sm text-blue-600">
-                  ИИ автоматически распознает все типы анализов (кровь, моча, гормоны и др.),
-                  даты и показатели — и создаст отдельные записи для каждого типа.
+                  {file?.name.toLowerCase().endsWith('.pdf')
+                    ? 'ИИ автоматически извлечёт все типы анализов (кровь, моча, гормоны и др.), даты и показатели — и создаст отдельные записи для каждого типа.'
+                    : 'GPT-4o Vision прочитает текст с фотографии бланка, распознает все показатели, даты и нормы — и создаст записи автоматически.'}
                 </p>
                 <form onSubmit={handleSmartParse} className="flex gap-3">
                   <Button type="submit" variant="gradient" loading={uploading} className="gap-2">

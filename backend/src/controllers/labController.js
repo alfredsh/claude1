@@ -141,47 +141,11 @@ const getLabResult = async (req, res) => {
   }
 };
 
-const parsePdfLabResults = async (req, res) => {
-  try {
-    const profile = await prisma.patientProfile.findUnique({ where: { userId: req.user.id } });
-    if (!profile) return res.status(404).json({ error: 'Профиль не найден' });
-    if (!req.file) return res.status(400).json({ error: 'Файл не загружен' });
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png'];
+const MIME_TYPES = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png' };
 
-    const fileUrl = `/uploads/${req.user.id}/${req.file.filename}`;
-    const filePath = path.join(process.cwd(), fileUrl.slice(1));
-
-    let rawText = '';
-    try {
-      const pdfParse = require('pdf-parse');
-      const buffer = fs.readFileSync(filePath);
-      const data = await pdfParse(buffer);
-      rawText = (data.text || '').trim();
-    } catch (err) {
-      console.error('PDF read error:', err.message);
-      return res.status(422).json({ error: 'Не удалось прочитать PDF. Возможно, это скан-изображение.' });
-    }
-
-    if (!rawText) {
-      return res.status(422).json({ error: 'PDF не содержит текста. Загрузите текстовый PDF, не скан.' });
-    }
-
-    // Normalize text: collapse excessive whitespace but keep newlines for structure
-    const pdfText = rawText
-      .replace(/\r\n/g, '\n')
-      .replace(/[ \t]+/g, ' ')
-      .replace(/\n{4,}/g, '\n\n\n')
-      .substring(0, 50000); // GPT-4o can handle large contexts
-
-    const today = new Date().toISOString().slice(0, 10);
-
-    const ai = getAIClient();
-    const completion = await ai.chat.completions.create({
-      model: 'gpt-4o', // Always use best model for structured medical extraction
-      messages: [
-        {
-          role: 'system',
-          content: `Ты — эксперт по обработке российских медицинских лабораторных документов.
-Твоя задача — извлечь ВСЕ показатели из текста и вернуть валидный JSON.
+const LAB_SYSTEM_PROMPT = (today) => `Ты — эксперт по обработке российских медицинских лабораторных документов.
+Твоя задача — извлечь ВСЕ показатели из документа и вернуть валидный JSON.
 
 КАТЕГОРИИ АНАЛИЗОВ (определяй автоматически):
 • Общий анализ крови (ОАК): гемоглобин, эритроциты, лейкоциты, тромбоциты, СОЭ, гематокрит, нейтрофилы (сег/пал), лимфоциты, моноциты, эозинофилы, базофилы, MCV, MCH, MCHC, RDW, MPV
@@ -190,7 +154,7 @@ const parsePdfLabResults = async (req, res) => {
 • Гормоны щитовидной железы: ТТГ, Т3 общий/свободный, Т4 общий/свободный, антитела к ТПО (АТ-ТПО), антитела к тиреоглобулину (АТ-ТГ), тиреоглобулин
 • Половые гормоны: ЛГ, ФСГ, эстрадиол, прогестерон, тестостерон (общий/свободный), пролактин, ДГЭА-с, ГСПГ, АМГ (антимюллеров гормон), ингибин B
 • Надпочечники: кортизол, АКТГ, альдостерон, ренин, 17-ОН прогестерон, андростендион
-• Онкомаркеры: ПСА (общий/свободный), ХГЧ, АФП, РЭА (CEA), СА-125, СА-19-9, СА-15-3, НСЕ, CYFRA 21-1, SCC, ПРЛ
+• Онкомаркеры: ПСА (общий/свободный), ХГЧ, АФП, РЭА (CEA), СА-125, СА-19-9, СА-15-3, НСЕ, CYFRA 21-1, SCC
 • Коагулограмма (гемостаз): МНО, ПТВ, ПТИ, протромбин по Квику, АЧТВ, тромбиновое время, фибриноген, Д-димер, антитромбин III, протеин C, протеин S
 • Иммунология и инфекции: ЦРБ, ревматоидный фактор, АСЛО, ANA, ANCA, IgG/IgM/IgA/IgE, ВИЧ, гепатит B (HBsAg/Anti-HBs/HBeAg), гепатит C (Anti-HCV), сифилис (RW/RPR), хламидии, микоплазма
 • Витамины и микроэлементы: витамин D (25-OH), B12, фолиевая кислота, витамин A, E, B9, кальций, фосфор, магний, калий, натрий, хлор, цинк, медь, селен, йод
@@ -216,15 +180,9 @@ const parsePdfLabResults = async (req, res) => {
 4. Если в документе несколько дат — у каждой группы своя дата
 5. Если дата одна на весь документ — используй её для всех групп
 6. Если дата не найдена — "${today}"
-7. ВОЗВРАЩАЙ ТОЛЬКО JSON — никаких пояснений, никакого markdown`,
-        },
-        {
-          role: 'user',
-          content: `Текст медицинского документа:
+7. ВОЗВРАЩАЙ ТОЛЬКО JSON — никаких пояснений, никакого markdown`;
 
-${pdfText}
-
-Верни JSON строго в этом формате (массив results может содержать много элементов):
+const JSON_EXAMPLE = `Верни JSON строго в этом формате:
 {
   "results": [
     {
@@ -234,21 +192,83 @@ ${pdfText}
         {"name": "Гемоглобин", "value": 135.0, "unit": "г/л", "normalMin": 120.0, "normalMax": 160.0},
         {"name": "Лейкоциты", "value": 6.2, "unit": "10⁹/л", "normalMin": 4.0, "normalMax": 9.0}
       ]
-    },
-    {
-      "testName": "Биохимия крови",
-      "testDate": "2026-02-28",
-      "parameters": [
-        {"name": "Глюкоза", "value": 5.1, "unit": "ммоль/л", "normalMin": 3.9, "normalMax": 6.1}
-      ]
     }
   ]
-}`,
-        },
-      ],
-      max_tokens: 8000,
-      response_format: { type: 'json_object' },
-    });
+}`;
+
+const parsePdfLabResults = async (req, res) => {
+  try {
+    const profile = await prisma.patientProfile.findUnique({ where: { userId: req.user.id } });
+    if (!profile) return res.status(404).json({ error: 'Профиль не найден' });
+    if (!req.file) return res.status(400).json({ error: 'Файл не загружен' });
+
+    const fileUrl = `/uploads/${req.user.id}/${req.file.filename}`;
+    const filePath = path.join(process.cwd(), fileUrl.slice(1));
+    const ext = path.extname(req.file.originalname || req.file.filename).toLowerCase();
+    const isImage = IMAGE_EXTENSIONS.includes(ext);
+    const today = new Date().toISOString().slice(0, 10);
+    const ai = getAIClient();
+    let completion;
+
+    if (isImage) {
+      // --- GPT-4o Vision path for JPG / PNG ---
+      const mimeType = MIME_TYPES[ext] || 'image/jpeg';
+      const base64 = fs.readFileSync(filePath).toString('base64');
+
+      completion = await ai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: LAB_SYSTEM_PROMPT(today) },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: { url: `data:${mimeType};base64,${base64}`, detail: 'high' },
+              },
+              {
+                type: 'text',
+                text: `Извлеки ВСЕ лабораторные показатели из этого изображения медицинского документа.\n\n${JSON_EXAMPLE}`,
+              },
+            ],
+          },
+        ],
+        max_tokens: 8000,
+        response_format: { type: 'json_object' },
+      });
+    } else {
+      // --- pdf-parse + text path for PDF ---
+      let rawText = '';
+      try {
+        const pdfParse = require('pdf-parse');
+        const buffer = fs.readFileSync(filePath);
+        const data = await pdfParse(buffer);
+        rawText = (data.text || '').trim();
+      } catch (err) {
+        console.error('PDF read error:', err.message);
+        return res.status(422).json({ error: 'Не удалось прочитать PDF. Возможно, это скан-изображение. Попробуйте загрузить как JPG/PNG.' });
+      }
+
+      if (!rawText) {
+        return res.status(422).json({ error: 'PDF не содержит текста. Попробуйте сфотографировать и загрузить как JPG.' });
+      }
+
+      const pdfText = rawText
+        .replace(/\r\n/g, '\n')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n{4,}/g, '\n\n\n')
+        .substring(0, 50000);
+
+      completion = await ai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: LAB_SYSTEM_PROMPT(today) },
+          { role: 'user', content: `Текст медицинского документа:\n\n${pdfText}\n\n${JSON_EXAMPLE}` },
+        ],
+        max_tokens: 8000,
+        response_format: { type: 'json_object' },
+      });
+    }
 
     let parsed;
     try {
@@ -259,7 +279,7 @@ ${pdfText}
 
     const resultsData = parsed.results || parsed.labResults || [];
     if (!resultsData.length) {
-      return res.status(422).json({ error: 'Анализы в документе не обнаружены. Проверьте формат PDF.' });
+      return res.status(422).json({ error: 'Анализы в документе не обнаружены. Проверьте качество изображения или формат файла.' });
     }
 
     const safeParseFloat = (val) => {
@@ -278,12 +298,12 @@ ${pdfText}
         .map((p) => ({ ...p, value: safeParseFloat(p.value) }))
         .filter((p) => p.value !== null);
 
-      if (!params.length) continue; // skip groups with no valid numbers
+      if (!params.length) continue;
 
       const labResult = await prisma.labResult.create({
         data: {
           patientId: profile.id,
-          testName: r.testName || 'Анализ из PDF',
+          testName: r.testName || 'Анализ из файла',
           testDate: new Date(r.testDate || Date.now()),
           fileUrl,
           status: 'processing',
@@ -314,8 +334,8 @@ ${pdfText}
 
     res.status(201).json({ count: created.length, results: created });
   } catch (err) {
-    console.error('Parse PDF error:', err);
-    res.status(500).json({ error: 'Ошибка автоматической обработки PDF' });
+    console.error('Parse file error:', err);
+    res.status(500).json({ error: 'Ошибка автоматической обработки файла' });
   }
 };
 
