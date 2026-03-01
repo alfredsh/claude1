@@ -2,8 +2,9 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import {
   LayoutDashboard, User, FlaskConical, Activity, Brain,
-  Utensils, Pill, Star, LogOut, Menu, X, Heart, ChevronRight, FileHeart
+  Utensils, Pill, Star, LogOut, Menu, X, ChevronRight, FileHeart
 } from 'lucide-react'
+import { AppLogo } from '@/components/AppLogo'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -49,9 +50,7 @@ export default function PatientLayout() {
         {/* Logo */}
         <div className="p-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl gradient-health flex items-center justify-center shadow-md">
-              <Heart className="w-5 h-5 text-white" />
-            </div>
+            <AppLogo size={40} className="rounded-xl shadow-md" />
             <div>
               <p className="font-bold text-slate-900">HealthTwin</p>
               <p className="text-xs text-slate-500">Цифровой двойник</p>

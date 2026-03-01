@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Heart, Brain, FlaskConical, Activity, Users, Shield, ArrowRight, CheckCircle, Zap, Star, Smartphone, Download, Share2, Plus, Wifi } from 'lucide-react'
+import { Brain, FlaskConical, Activity, Users, Shield, ArrowRight, CheckCircle, Zap, Star, Smartphone, Download, Share2, Plus, Wifi } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AppLogo } from '@/components/AppLogo'
 
 const features = [
   { icon: Brain, title: 'ИИ-коуч здоровья', desc: 'Персональный ИИ-ассистент анализирует ваши данные и даёт рекомендации 24/7', color: 'bg-blue-50 text-blue-600' },
@@ -28,7 +29,7 @@ export default function LandingPage() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/icon-192x192.png" alt="HealthTwin" className="w-9 h-9 rounded-xl shadow-md" />
+            <AppLogo size={36} className="rounded-xl shadow-md" />
             <span className="font-bold text-slate-900 text-lg">HealthTwin</span>
           </div>
           <div className="flex items-center gap-3">
@@ -217,7 +218,7 @@ export default function LandingPage() {
                     </div>
                     {/* Шапка */}
                     <div className="flex items-center gap-2 mb-4">
-                      <img src="/icon-192x192.png" alt="HealthTwin" className="w-7 h-7 rounded-lg shadow" />
+                      <AppLogo size={28} className="rounded-lg shadow" />
                       <span className="text-white font-bold text-sm">HealthTwin</span>
                     </div>
                     {/* Карточки-заглушки */}

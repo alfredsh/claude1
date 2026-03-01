@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Heart, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
+import { AppLogo } from '@/components/AppLogo'
 import { authAPI } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
@@ -45,9 +46,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-2xl gradient-health flex items-center justify-center shadow-lg">
-              <Heart className="w-6 h-6 text-white" />
-            </div>
+            <AppLogo size={48} className="rounded-2xl shadow-lg" />
             <span className="text-2xl font-bold text-slate-900">HealthTwin</span>
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">Войти в аккаунт</h1>
