@@ -160,6 +160,18 @@ const buildFullPatientSummary = (patient) => {
   return lines.join('\n');
 };
 
+const getPatientDocs = async (req, res) => {
+  try {
+    const docs = await prisma.medicalDocument.findMany({
+      where: { patientId: req.params.id },
+      orderBy: { docDate: 'desc' },
+    });
+    res.json(docs);
+  } catch (err) {
+    res.status(500).json({ error: 'Ошибка получения документов пациента' });
+  }
+};
+
 const getDoctorProfile = async (req, res) => {
   try {
     const profile = await prisma.doctorProfile.findUnique({ where: { userId: req.user.id } });
@@ -170,4 +182,4 @@ const getDoctorProfile = async (req, res) => {
   }
 };
 
-module.exports = { getPatients, getPatient, addPrescription, addDoctorRecommendation, analyzePatientAI, getDoctorProfile };
+module.exports = { getPatients, getPatient, addPrescription, addDoctorRecommendation, analyzePatientAI, getDoctorProfile, getPatientDocs };
