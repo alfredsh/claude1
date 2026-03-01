@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Utensils, Plus, TrendingUp, Camera, Loader2, Sparkles, X, ImageIcon,
-  BookOpen, CheckCircle, AlertTriangle, XCircle, Star, Flame, ChevronDown, ChevronUp,
+  BookOpen, CheckCircle, AlertTriangle, XCircle, Star, Flame, ChevronDown, ChevronUp, Link as LinkIcon,
 } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
@@ -59,11 +59,13 @@ export default function Nutrition() {
 
   // Menu analysis state
   const [showMenuModal, setShowMenuModal] = useState(false)
+  const [menuTab, setMenuTab] = useState<'photo' | 'url'>('photo')
   const [menuPreview, setMenuPreview] = useState<string | null>(null)
   const [menuAnalyzing, setMenuAnalyzing] = useState(false)
-  const [menuResult, setMenuResult] = useState<MenuAnalysis | null>(null)
+  const [menuResult, setMenuResult] = useState<MenuAnalysis & { source?: string } | null>(null)
   const [menuFilter, setMenuFilter] = useState<'all' | 'recommended' | 'moderate' | 'avoid'>('all')
   const [showAllItems, setShowAllItems] = useState(false)
+  const [menuUrl, setMenuUrl] = useState('')
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
@@ -166,6 +168,26 @@ export default function Nutrition() {
     }
   }
 
+  const handleMenuUrl = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!menuUrl.trim()) return
+    setMenuResult(null)
+    setMenuAnalyzing(true)
+    setShowAllItems(false)
+    try {
+      const res = await patientAPI.analyzeMenuUrl(menuUrl.trim())
+      setMenuResult(res.data)
+    } catch (err: any) {
+      toast({
+        title: 'Не удалось проанализировать меню',
+        description: err.response?.data?.error || 'Проверьте ссылку или попробуйте фото меню',
+        variant: 'destructive',
+      })
+    } finally {
+      setMenuAnalyzing(false)
+    }
+  }
+
   const closeMenu = () => {
     setShowMenuModal(false)
     setMenuPreview(null)
@@ -173,6 +195,17 @@ export default function Nutrition() {
     setMenuAnalyzing(false)
     setMenuFilter('all')
     setShowAllItems(false)
+    setMenuUrl('')
+  }
+
+  const switchMenuTab = (tab: 'photo' | 'url') => {
+    setMenuTab(tab)
+    setMenuPreview(null)
+    setMenuResult(null)
+    setMenuAnalyzing(false)
+    setMenuFilter('all')
+    setShowAllItems(false)
+    setMenuUrl('')
   }
 
   const addLog = async (e: React.FormEvent) => {
@@ -243,6 +276,23 @@ export default function Nutrition() {
                 </button>
               </div>
 
+              {/* Tabs */}
+              <div className="px-6 pt-4 flex gap-1 bg-white border-b border-slate-100">
+                {(['photo', 'url'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => switchMenuTab(tab)}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-t-xl border-b-2 transition-colors ${
+                      menuTab === tab
+                        ? 'border-blue-500 text-blue-600 bg-blue-50/50'
+                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    {tab === 'photo' ? <><Camera className="w-3.5 h-3.5" /> Фото меню</> : <><LinkIcon className="w-3.5 h-3.5" /> Ссылка на меню</>}
+                  </button>
+                ))}
+              </div>
+
               <div className="p-6 space-y-5">
                 {/* Upload area */}
                 <input
@@ -254,7 +304,8 @@ export default function Nutrition() {
                   onChange={handleMenuPhoto}
                 />
 
-                {!menuPreview && !menuAnalyzing && (
+                {/* ── Photo tab ── */}
+                {menuTab === 'photo' && !menuPreview && !menuAnalyzing && (
                   <button
                     type="button"
                     onClick={() => menuInputRef.current?.click()}
@@ -268,10 +319,41 @@ export default function Nutrition() {
                   </button>
                 )}
 
+                {/* ── URL tab ── */}
+                {menuTab === 'url' && !menuAnalyzing && !menuResult && (
+                  <form onSubmit={handleMenuUrl} className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Ссылка на меню ресторана</label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <Input
+                            value={menuUrl}
+                            onChange={(e) => setMenuUrl(e.target.value)}
+                            placeholder="https://restaurant.ru/menu"
+                            className="pl-9"
+                            type="url"
+                          />
+                        </div>
+                        <Button type="submit" variant="gradient" disabled={!menuUrl.trim()} className="gap-1.5 whitespace-nowrap">
+                          <Sparkles className="w-4 h-4" /> Анализировать
+                        </Button>
+                      </div>
+                      <p className="text-xs text-slate-400">Вставьте ссылку на страницу с меню — ИИ её загрузит и проанализирует с учётом вашего здоровья</p>
+                    </div>
+                  </form>
+                )}
+
                 {menuAnalyzing && (
                   <div className="flex flex-col items-center gap-4 py-8">
                     {menuPreview && (
                       <img src={menuPreview} alt="menu" className="h-40 rounded-xl object-cover shadow-md" />
+                    )}
+                    {menuTab === 'url' && menuUrl && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg text-xs text-slate-600 max-w-xs truncate">
+                        <LinkIcon className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">{menuUrl}</span>
+                      </div>
                     )}
                     <div className="flex items-center gap-2 text-slate-600">
                       <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
@@ -283,19 +365,24 @@ export default function Nutrition() {
                   </div>
                 )}
 
-                {menuPreview && !menuAnalyzing && menuResult && (
+                {(menuPreview || menuTab === 'url') && !menuAnalyzing && menuResult && (
                   <div className="space-y-5">
-                    {/* Photo + retake */}
-                    <div className="flex items-center gap-3">
-                      <img src={menuPreview} alt="menu" className="h-16 w-24 rounded-xl object-cover border border-slate-200 shadow-sm" />
-                      <button
-                        type="button"
-                        onClick={() => menuInputRef.current?.click()}
-                        className="text-xs text-blue-600 hover:underline"
-                      >
-                        Сфотографировать другое меню
-                      </button>
-                    </div>
+                    {/* Source */}
+                    {menuTab === 'photo' && menuPreview && (
+                      <div className="flex items-center gap-3">
+                        <img src={menuPreview} alt="menu" className="h-16 w-24 rounded-xl object-cover border border-slate-200 shadow-sm" />
+                        <button type="button" onClick={() => menuInputRef.current?.click()} className="text-xs text-blue-600 hover:underline">
+                          Сфотографировать другое меню
+                        </button>
+                      </div>
+                    )}
+                    {menuTab === 'url' && menuResult?.source && (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600">
+                        <LinkIcon className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                        <span className="font-medium">{menuResult.source}</span>
+                        <button onClick={() => switchMenuTab('url')} className="ml-auto text-blue-600 hover:underline">Другая ссылка</button>
+                      </div>
+                    )}
 
                     {/* Personal note */}
                     {menuResult.personalNote && (

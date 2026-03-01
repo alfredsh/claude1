@@ -1,6 +1,7 @@
 const prisma = require('../config/database');
 const path = require('path');
 const fs = require('fs');
+const fetch = require('node-fetch');
 const { getAIClient } = require('../config/ai');
 
 const getProfile = async (req, res) => {
@@ -236,101 +237,8 @@ const analyzeMenuPhoto = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Фото не загружено' });
 
     // ── Collect full patient health context ──────────────────────────────────
-    const profile = await prisma.patientProfile.findUnique({
-      where: { userId: req.user.id },
-      include: {
-        labResults: {
-          orderBy: { testDate: 'desc' },
-          take: 2,
-          include: { parameters: { where: { isAbnormal: true }, take: 20 } },
-        },
-        healthMetrics: { orderBy: { recordedAt: 'desc' }, take: 30 },
-        supplements: { where: { isActive: true } },
-        nutritionLogs: {
-          where: { loggedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
-          orderBy: { loggedAt: 'desc' },
-        },
-        geneticData: true,
-      },
-    });
-    if (!profile) return res.status(404).json({ error: 'Профиль не найден' });
-
-    // Build concise context string
-    const age = profile.dateOfBirth
-      ? Math.floor((Date.now() - new Date(profile.dateOfBirth).getTime()) / (365.25 * 24 * 3600 * 1000))
-      : null;
-
-    const lines = ['=== ПРОФИЛЬ ПАЦИЕНТА ==='];
-    if (age) lines.push(`Возраст: ${age} лет`);
-    if (profile.gender) lines.push(`Пол: ${profile.gender}`);
-    if (profile.height) lines.push(`Рост: ${profile.height} см`);
-    if (profile.weight) lines.push(`Вес: ${profile.weight} кг`);
-    if (profile.height && profile.weight) {
-      const bmi = (profile.weight / ((profile.height / 100) ** 2)).toFixed(1);
-      lines.push(`ИМТ: ${bmi}`);
-    }
-    if (profile.bloodType) lines.push(`Группа крови: ${profile.bloodType}`);
-    if (profile.activityLevel) lines.push(`Активность: ${profile.activityLevel}`);
-    if (profile.dietType) lines.push(`Тип питания/диета: ${profile.dietType}`);
-    if (profile.goals?.length) lines.push(`Цели: ${profile.goals.join(', ')}`);
-    if (profile.allergies?.length) lines.push(`АЛЛЕРГИИ: ${profile.allergies.join(', ')}`);
-    if (profile.chronicDiseases?.length) lines.push(`Хронические заболевания: ${profile.chronicDiseases.join(', ')}`);
-    if (profile.medications?.length) lines.push(`Препараты: ${profile.medications.join(', ')}`);
-    if (profile.smokingStatus) lines.push(`Курение: ${profile.smokingStatus}`);
-    if (profile.alcoholUsage) lines.push(`Алкоголь: ${profile.alcoholUsage}`);
-    if (profile.stressLevel) lines.push(`Уровень стресса: ${profile.stressLevel}/10`);
-    if (profile.sleepHours) lines.push(`Сон: ${profile.sleepHours} ч/сутки`);
-
-    // Today's nutrition intake
-    if (profile.nutritionLogs.length) {
-      const todayCal = profile.nutritionLogs.reduce((s, l) => s + (l.calories || 0), 0);
-      const todayProt = profile.nutritionLogs.reduce((s, l) => s + (l.protein || 0), 0);
-      const todayCarbs = profile.nutritionLogs.reduce((s, l) => s + (l.carbs || 0), 0);
-      const todayFats = profile.nutritionLogs.reduce((s, l) => s + (l.fats || 0), 0);
-      const meals = profile.nutritionLogs.map(l => l.foodName).join(', ');
-      lines.push(`\n=== ПИТАНИЕ СЕГОДНЯ ===`);
-      lines.push(`Уже съедено: ${Math.round(todayCal)} ккал (Б:${Math.round(todayProt)}г У:${Math.round(todayCarbs)}г Ж:${Math.round(todayFats)}г)`);
-      lines.push(`Блюда: ${meals}`);
-    } else {
-      lines.push(`\n=== ПИТАНИЕ СЕГОДНЯ ===\nСегодня ещё ничего не ел(а).`);
-    }
-
-    // Active supplements
-    if (profile.supplements.length) {
-      lines.push(`\n=== АКТИВНЫЕ БАД И ПРЕПАРАТЫ ===`);
-      profile.supplements.forEach(s => {
-        lines.push(`  ${s.name} ${s.dosage || ''} — ${s.reason || ''}`);
-      });
-    }
-
-    // Abnormal lab values
-    const abnormalParams = profile.labResults.flatMap(lr => lr.parameters);
-    if (abnormalParams.length) {
-      lines.push(`\n=== ОТКЛОНЕНИЯ В АНАЛИЗАХ ===`);
-      abnormalParams.slice(0, 15).forEach(p => {
-        lines.push(`  ${p.name}: ${p.value} ${p.unit || ''} (норма: ${p.normalRange || '?'}) — ${p.status}`);
-      });
-    }
-
-    // Latest health metrics (last value of each type)
-    if (profile.healthMetrics.length) {
-      const latestByType: Record<string, any> = {};
-      profile.healthMetrics.forEach(m => {
-        if (!latestByType[m.type]) latestByType[m.type] = m;
-      });
-      lines.push(`\n=== ПОСЛЕДНИЕ ПОКАЗАТЕЛИ ===`);
-      Object.values(latestByType).forEach((m: any) => {
-        lines.push(`  ${m.type}: ${m.value} ${m.unit || ''}`);
-      });
-    }
-
-    // Genetic risks
-    if (profile.geneticData?.riskFactors) {
-      lines.push(`\n=== ГЕНЕТИЧЕСКИЕ РИСКИ ===`);
-      lines.push(JSON.stringify(profile.geneticData.riskFactors).slice(0, 500));
-    }
-
-    const contextText = lines.join('\n');
+    const contextText = await buildPatientContext(req.user.id);
+    if (!contextText) return res.status(404).json({ error: 'Профиль не найден' });
 
     // ── Call AI ──────────────────────────────────────────────────────────────
     const filePath = require('path').join(process.cwd(), 'uploads', req.user.id, req.file.filename);
@@ -413,8 +321,211 @@ const analyzeMenuPhoto = async (req, res) => {
   }
 };
 
+// Shared helper — build patient health context string (used by both menu endpoints)
+const buildPatientContext = async (userId) => {
+  const profile = await prisma.patientProfile.findUnique({
+    where: { userId },
+    include: {
+      labResults: {
+        orderBy: { testDate: 'desc' },
+        take: 2,
+        include: { parameters: { where: { isAbnormal: true }, take: 20 } },
+      },
+      healthMetrics: { orderBy: { recordedAt: 'desc' }, take: 30 },
+      supplements: { where: { isActive: true } },
+      nutritionLogs: {
+        where: { loggedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+        orderBy: { loggedAt: 'desc' },
+      },
+      geneticData: true,
+    },
+  });
+  if (!profile) return null;
+
+  const age = profile.dateOfBirth
+    ? Math.floor((Date.now() - new Date(profile.dateOfBirth).getTime()) / (365.25 * 24 * 3600 * 1000))
+    : null;
+
+  const lines = ['=== ПРОФИЛЬ ПАЦИЕНТА ==='];
+  if (age) lines.push(`Возраст: ${age} лет`);
+  if (profile.gender) lines.push(`Пол: ${profile.gender}`);
+  if (profile.height) lines.push(`Рост: ${profile.height} см`);
+  if (profile.weight) lines.push(`Вес: ${profile.weight} кг`);
+  if (profile.height && profile.weight) {
+    const bmi = (profile.weight / ((profile.height / 100) ** 2)).toFixed(1);
+    lines.push(`ИМТ: ${bmi}`);
+  }
+  if (profile.bloodType) lines.push(`Группа крови: ${profile.bloodType}`);
+  if (profile.activityLevel) lines.push(`Активность: ${profile.activityLevel}`);
+  if (profile.dietType) lines.push(`Тип питания/диета: ${profile.dietType}`);
+  if (profile.goals?.length) lines.push(`Цели: ${profile.goals.join(', ')}`);
+  if (profile.allergies?.length) lines.push(`АЛЛЕРГИИ: ${profile.allergies.join(', ')}`);
+  if (profile.chronicDiseases?.length) lines.push(`Хронические заболевания: ${profile.chronicDiseases.join(', ')}`);
+  if (profile.medications?.length) lines.push(`Препараты: ${profile.medications.join(', ')}`);
+  if (profile.smokingStatus) lines.push(`Курение: ${profile.smokingStatus}`);
+  if (profile.alcoholUsage) lines.push(`Алкоголь: ${profile.alcoholUsage}`);
+  if (profile.stressLevel) lines.push(`Уровень стресса: ${profile.stressLevel}/10`);
+  if (profile.sleepHours) lines.push(`Сон: ${profile.sleepHours} ч/сутки`);
+
+  if (profile.nutritionLogs.length) {
+    const todayCal  = profile.nutritionLogs.reduce((s, l) => s + (l.calories || 0), 0);
+    const todayProt = profile.nutritionLogs.reduce((s, l) => s + (l.protein  || 0), 0);
+    const todayCarbs= profile.nutritionLogs.reduce((s, l) => s + (l.carbs    || 0), 0);
+    const todayFats = profile.nutritionLogs.reduce((s, l) => s + (l.fats     || 0), 0);
+    lines.push(`\n=== ПИТАНИЕ СЕГОДНЯ ===`);
+    lines.push(`Уже съедено: ${Math.round(todayCal)} ккал (Б:${Math.round(todayProt)}г У:${Math.round(todayCarbs)}г Ж:${Math.round(todayFats)}г)`);
+    lines.push(`Блюда: ${profile.nutritionLogs.map(l => l.foodName).join(', ')}`);
+  } else {
+    lines.push(`\n=== ПИТАНИЕ СЕГОДНЯ ===\nСегодня ещё ничего не ел(а).`);
+  }
+
+  if (profile.supplements.length) {
+    lines.push(`\n=== АКТИВНЫЕ БАД И ПРЕПАРАТЫ ===`);
+    profile.supplements.forEach(s => lines.push(`  ${s.name} ${s.dosage || ''} — ${s.reason || ''}`));
+  }
+
+  const abnormalParams = profile.labResults.flatMap(lr => lr.parameters);
+  if (abnormalParams.length) {
+    lines.push(`\n=== ОТКЛОНЕНИЯ В АНАЛИЗАХ ===`);
+    abnormalParams.slice(0, 15).forEach(p => {
+      lines.push(`  ${p.name}: ${p.value} ${p.unit || ''} (норма: ${p.normalRange || '?'}) — ${p.status}`);
+    });
+  }
+
+  if (profile.healthMetrics.length) {
+    const latestByType = {};
+    profile.healthMetrics.forEach(m => { if (!latestByType[m.type]) latestByType[m.type] = m; });
+    lines.push(`\n=== ПОСЛЕДНИЕ ПОКАЗАТЕЛИ ===`);
+    Object.values(latestByType).forEach(m => lines.push(`  ${m.type}: ${m.value} ${m.unit || ''}`));
+  }
+
+  if (profile.geneticData?.riskFactors) {
+    lines.push(`\n=== ГЕНЕТИЧЕСКИЕ РИСКИ ===`);
+    lines.push(JSON.stringify(profile.geneticData.riskFactors).slice(0, 500));
+  }
+
+  return lines.join('\n');
+};
+
+// Strip HTML to plain text
+const htmlToText = (html) => {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+};
+
+// POST /api/patient/nutrition/analyze-menu-url
+const analyzeMenuUrl = async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'URL не указан' });
+
+    // Basic URL validation
+    let parsedUrl;
+    try { parsedUrl = new URL(url); } catch { return res.status(400).json({ error: 'Некорректный URL' }); }
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return res.status(400).json({ error: 'Поддерживаются только http:// и https:// ссылки' });
+    }
+
+    // Fetch page
+    let pageText;
+    try {
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HealthTwin/1.0)' },
+        timeout: 10000,
+      });
+      if (!response.ok) return res.status(422).json({ error: `Не удалось загрузить страницу (${response.status})` });
+      const html = await response.text();
+      pageText = htmlToText(html).slice(0, 12000); // limit to ~12k chars
+    } catch (fetchErr) {
+      return res.status(422).json({ error: 'Не удалось открыть ссылку. Проверьте адрес или попробуйте фото.' });
+    }
+
+    if (pageText.length < 100) {
+      return res.status(422).json({ error: 'Страница пустая или недоступна' });
+    }
+
+    // Build patient context
+    const contextText = await buildPatientContext(req.user.id);
+    if (!contextText) return res.status(404).json({ error: 'Профиль пациента не найден' });
+
+    const ai = getAIClient();
+    const completion = await ai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `Ты — персональный нутрициолог-диетолог с медицинским образованием.
+Тебе передан текст страницы меню ресторана (извлечён из HTML) и данные о здоровье пациента.
+Твоя задача — дать персонализированные рекомендации что заказать.
+
+Правила:
+1. Учитывай аллергии как абсолютные противопоказания
+2. Учитывай уже съеденное сегодня — балансируй БЖУ и калории
+3. Учитывай хронические заболевания, отклонения в анализах, принимаемые БАД
+4. Учитывай цели пациента
+5. Если диета пациента не указана — ориентируйся на здоровое питание
+6. Давай конкретные практические советы (порция, способ приготовления)
+7. Из текста страницы извлеки все блюда/позиции меню, которые сможешь найти
+
+Верни ТОЛЬКО валидный JSON без пояснений вне JSON:
+{
+  "personalNote": "Краткий персональный совет (2-3 предложения)",
+  "caloriesBudget": число или null,
+  "topPicks": ["название1", "название2"],
+  "items": [
+    {
+      "name": "название блюда",
+      "category": "recommended" | "moderate" | "avoid",
+      "reason": "краткое объяснение",
+      "tip": "совет (необязательно)"
+    }
+  ],
+  "avoidSummary": "что избегать и почему" или null,
+  "balanceNote": "как вписывается в дневной рацион" или null
+}
+
+Если в тексте нет меню ресторана — верни {"error": "not_menu"}.`,
+        },
+        {
+          role: 'user',
+          content: `Данные пациента:\n\n${contextText}\n\n---\n\nТекст страницы меню (${parsedUrl.hostname}):\n\n${pageText}\n\nПроанализируй меню и дай персонализированные рекомендации. Верни JSON.`,
+        },
+      ],
+      max_tokens: 2000,
+      response_format: { type: 'json_object' },
+    });
+
+    const parsed = JSON.parse(completion.choices[0].message.content);
+    if (parsed.error === 'not_menu') {
+      return res.status(422).json({ error: 'На странице не найдено меню ресторана' });
+    }
+
+    res.json({
+      personalNote:   parsed.personalNote   || null,
+      caloriesBudget: parsed.caloriesBudget ?? null,
+      topPicks:       parsed.topPicks       || [],
+      items:          parsed.items          || [],
+      avoidSummary:   parsed.avoidSummary   || null,
+      balanceNote:    parsed.balanceNote    || null,
+      source:         parsedUrl.hostname,
+    });
+  } catch (err) {
+    console.error('Menu URL analysis error:', err);
+    res.status(500).json({ error: 'Ошибка анализа меню' });
+  }
+};
+
 module.exports = {
   getProfile, updateProfile, addHealthMetric, getHealthMetrics,
   getSupplements, getRecommendations, addNutritionLog, getNutritionLogs,
-  analyzeNutritionPhoto, analyzeMenuPhoto,
+  analyzeNutritionPhoto, analyzeMenuPhoto, analyzeMenuUrl,
 };
