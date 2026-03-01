@@ -100,9 +100,13 @@ const analyzePatientAI = async (req, res) => {
     const patient = await prisma.patientProfile.findUnique({
       where: { id: req.params.id },
       include: {
-        labResults: { include: { parameters: true }, orderBy: { testDate: 'desc' }, take: 5 },
-        healthMetrics: { orderBy: { recordedAt: 'desc' }, take: 20 },
-        supplements: { where: { isActive: true } },
+        labResults:      { include: { parameters: true }, orderBy: { testDate: 'desc' }, take: 5 },
+        healthMetrics:   { orderBy: { recordedAt: 'desc' }, take: 20 },
+        supplements:     { where: { isActive: true } },
+        medicalDocuments:{ orderBy: { docDate: 'desc' }, take: 10 },
+        recommendations: { orderBy: { createdAt: 'desc' }, take: 10 },
+        nutritionLogs:   { orderBy: { loggedAt: 'desc' }, take: 7 },
+        geneticData:     true,
       },
     });
     if (!patient) return res.status(404).json({ error: 'Пациент не найден' });
@@ -119,7 +123,7 @@ const analyzePatientAI = async (req, res) => {
           content: `Проанализируй данные пациента и дай клиническое заключение с рекомендациями по дальнейшему лечению:\n\n${context}`,
         },
       ],
-      max_tokens: 1500,
+      max_tokens: 2000,
     });
 
     res.json({ analysis: completion.choices[0].message.content });
@@ -136,25 +140,110 @@ const buildFullPatientSummary = (patient) => {
     const age = Math.floor((Date.now() - new Date(patient.dateOfBirth)) / (365.25 * 24 * 60 * 60 * 1000));
     lines.push(`Возраст: ${age} лет`);
   }
-  if (patient.height && patient.weight) lines.push(`Рост/Вес: ${patient.height}см / ${patient.weight}кг`);
-  if (patient.bloodType) lines.push(`Группа крови: ${patient.bloodType}`);
+  if (patient.height && patient.weight) {
+    const bmi = (patient.weight / Math.pow(patient.height / 100, 2)).toFixed(1);
+    lines.push(`Рост/Вес/ИМТ: ${patient.height}см / ${patient.weight}кг / ${bmi}`);
+  }
+  if (patient.bloodType)  lines.push(`Группа крови: ${patient.bloodType}`);
   if (patient.chronicDiseases?.length) lines.push(`Хронические заболевания: ${patient.chronicDiseases.join(', ')}`);
-  if (patient.allergies?.length) lines.push(`Аллергии: ${patient.allergies.join(', ')}`);
-  if (patient.medications?.length) lines.push(`Текущие препараты: ${patient.medications.join(', ')}`);
+  if (patient.allergies?.length)       lines.push(`Аллергии: ${patient.allergies.join(', ')}`);
+  if (patient.medications?.length)     lines.push(`Постоянные препараты: ${patient.medications.join(', ')}`);
 
+  // Lifestyle
+  const lifestyle = [
+    patient.activityLevel  && `активность: ${patient.activityLevel}`,
+    patient.dietType       && `питание: ${patient.dietType}`,
+    patient.sleepHours     && `сон: ${patient.sleepHours}ч`,
+    patient.stressLevel    && `стресс: ${patient.stressLevel}/10`,
+    patient.smokingStatus  && `курение: ${patient.smokingStatus}`,
+    patient.alcoholUsage   && `алкоголь: ${patient.alcoholUsage}`,
+  ].filter(Boolean);
+  if (lifestyle.length) lines.push(`Образ жизни: ${lifestyle.join(', ')}`);
+
+  if (patient.healthGoals?.length) lines.push(`Цели здоровья: ${patient.healthGoals.join(', ')}`);
+
+  // Lab results — all parameters, mark abnormal
   if (patient.labResults?.length) {
-    lines.push('\nПоследние анализы:');
-    patient.labResults.slice(0, 3).forEach((lr) => {
-      lines.push(`- ${lr.testName} (${new Date(lr.testDate).toLocaleDateString('ru')})`);
-      const abnormal = lr.parameters.filter((p) => p.status !== 'NORMAL');
-      if (abnormal.length) {
-        abnormal.forEach((p) => lines.push(`  ⚠️ ${p.name}: ${p.value} ${p.unit} (${p.status})`));
+    lines.push('\n--- ЛАБОРАТОРНЫЕ АНАЛИЗЫ ---');
+    patient.labResults.forEach((lr) => {
+      lines.push(`${lr.testName} (${new Date(lr.testDate).toLocaleDateString('ru')}):`);
+      if (lr.parameters?.length) {
+        lr.parameters.forEach((p) => {
+          const flag = p.status !== 'NORMAL' ? ` ⚠️ ${p.status}` : '';
+          lines.push(`  ${p.name}: ${p.value} ${p.unit}${flag}`);
+        });
+      }
+      if (lr.aiInterpretation) lines.push(`  ИИ-интерпретация: ${lr.aiInterpretation.substring(0, 200)}`);
+    });
+  }
+
+  // Health metrics — latest values per type
+  if (patient.healthMetrics?.length) {
+    lines.push('\n--- ПОКАЗАТЕЛИ ЗДОРОВЬЯ (последние) ---');
+    const seen = new Set();
+    patient.healthMetrics.forEach((m) => {
+      if (!seen.has(m.metricType)) {
+        seen.add(m.metricType);
+        lines.push(`  ${m.metricType}: ${m.value} ${m.unit || ''} (${new Date(m.recordedAt).toLocaleDateString('ru')})`);
       }
     });
   }
 
+  // Medical documents
+  if (patient.medicalDocuments?.length) {
+    lines.push('\n--- МЕДИЦИНСКИЕ ИССЛЕДОВАНИЯ ---');
+    patient.medicalDocuments.forEach((d) => {
+      const date = new Date(d.docDate).toLocaleDateString('ru');
+      lines.push(`${d.docType} «${d.title}» (${date}), статус: ${d.status}`);
+      if (d.aiSummary) lines.push(`  Заключение: ${d.aiSummary.substring(0, 300)}`);
+      if (d.measurements && Object.keys(d.measurements).length) {
+        const mStr = Object.entries(d.measurements)
+          .filter(([, v]) => v !== null && v !== undefined && v !== '')
+          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join('; ') : v}`)
+          .join(', ');
+        if (mStr) lines.push(`  Показатели: ${mStr}`);
+      }
+    });
+  }
+
+  // Active supplements / prescriptions
   if (patient.supplements?.length) {
-    lines.push(`\nТекущие назначения: ${patient.supplements.map((s) => `${s.name} ${s.dosage}`).join(', ')}`);
+    lines.push('\n--- НАЗНАЧЕНИЯ ---');
+    patient.supplements.forEach((s) => {
+      lines.push(`  ${s.name} ${s.dosage}, ${s.frequency}${s.reason ? ` (${s.reason})` : ''}`);
+    });
+  }
+
+  // Recent nutrition (average summary)
+  if (patient.nutritionLogs?.length) {
+    lines.push('\n--- ПИТАНИЕ (последние записи) ---');
+    const avg = (arr, key) => {
+      const vals = arr.map(x => x[key]).filter(Boolean);
+      return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+    };
+    const avgCal = avg(patient.nutritionLogs, 'calories');
+    const avgP   = avg(patient.nutritionLogs, 'protein');
+    const avgF   = avg(patient.nutritionLogs, 'fat');
+    const avgC   = avg(patient.nutritionLogs, 'carbs');
+    if (avgCal) lines.push(`  Среднее за ${patient.nutritionLogs.length} дн.: ${avgCal} ккал, белки ${avgP}г, жиры ${avgF}г, углеводы ${avgC}г`);
+  }
+
+  // Genetic data
+  if (patient.geneticData) {
+    const g = patient.geneticData;
+    lines.push('\n--- ГЕНЕТИЧЕСКИЕ ДАННЫЕ ---');
+    if (g.haplotypeGroup) lines.push(`  Гаплогруппа: ${g.haplotypeGroup}`);
+    if (g.geneticRisks?.length) lines.push(`  Генетические риски: ${g.geneticRisks.join(', ')}`);
+    if (g.protectiveFactors?.length) lines.push(`  Протективные факторы: ${g.protectiveFactors.join(', ')}`);
+    if (g.drugResponse) lines.push(`  Фармакогенетика: ${JSON.stringify(g.drugResponse).substring(0, 200)}`);
+  }
+
+  // Active recommendations
+  if (patient.recommendations?.length) {
+    lines.push('\n--- ТЕКУЩИЕ РЕКОМЕНДАЦИИ ---');
+    patient.recommendations.slice(0, 5).forEach((r) => {
+      lines.push(`  [${r.priority.toUpperCase()}] ${r.title}: ${r.description?.substring(0, 120) || ''}`);
+    });
   }
 
   return lines.join('\n');
