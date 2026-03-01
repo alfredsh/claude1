@@ -329,7 +329,7 @@ const buildPatientContext = async (userId) => {
       labResults: {
         orderBy: { testDate: 'desc' },
         take: 2,
-        include: { parameters: { where: { isAbnormal: true }, take: 20 } },
+        include: { parameters: { where: { status: { not: 'NORMAL' } }, take: 20 } },
       },
       healthMetrics: { orderBy: { recordedAt: 'desc' }, take: 30 },
       supplements: { where: { isActive: true } },
@@ -388,7 +388,8 @@ const buildPatientContext = async (userId) => {
   if (abnormalParams.length) {
     lines.push(`\n=== ОТКЛОНЕНИЯ В АНАЛИЗАХ ===`);
     abnormalParams.slice(0, 15).forEach(p => {
-      lines.push(`  ${p.name}: ${p.value} ${p.unit || ''} (норма: ${p.normalRange || '?'}) — ${p.status}`);
+      const norm = (p.normalMin != null && p.normalMax != null) ? `${p.normalMin}–${p.normalMax}` : '?';
+      lines.push(`  ${p.name}: ${p.value} ${p.unit || ''} (норма: ${norm}) — ${p.status}`);
     });
   }
 
