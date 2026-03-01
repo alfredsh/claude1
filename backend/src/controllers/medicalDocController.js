@@ -219,4 +219,36 @@ const deleteMedicalDoc = async (req, res) => {
   }
 };
 
-module.exports = { uploadMedicalDoc, getMedicalDocs, deleteMedicalDoc, DOC_TYPE_LABELS };
+// POST /api/medical/:id/reanalyze
+const reanalyzeMedicalDoc = async (req, res) => {
+  try {
+    const profile = await prisma.patientProfile.findUnique({ where: { userId: req.user.id } });
+    if (!profile) return res.status(404).json({ error: 'Профиль не найден' });
+
+    const doc = await prisma.medicalDocument.findFirst({
+      where: { id: req.params.id, patientId: profile.id },
+    });
+    if (!doc) return res.status(404).json({ error: 'Документ не найден' });
+    if (!doc.fileUrl) return res.status(400).json({ error: 'Файл не прикреплён' });
+
+    const filePath = path.join(process.cwd(), doc.fileUrl.startsWith('/') ? doc.fileUrl.slice(1) : doc.fileUrl);
+    if (!fs.existsSync(filePath)) return res.status(400).json({ error: 'Файл не найден на сервере' });
+
+    const ext   = path.extname(filePath).toLowerCase();
+    const today = new Date().toISOString().slice(0, 10);
+
+    await prisma.medicalDocument.update({
+      where: { id: doc.id },
+      data: { status: 'processing' },
+    });
+
+    runAIExtraction(doc.id, filePath, ext, doc.docType, today).catch(console.error);
+
+    res.json({ message: 'Повторный анализ запущен' });
+  } catch (err) {
+    console.error('Reanalyze error:', err);
+    res.status(500).json({ error: 'Ошибка запуска анализа' });
+  }
+};
+
+module.exports = { uploadMedicalDoc, getMedicalDocs, deleteMedicalDoc, reanalyzeMedicalDoc, DOC_TYPE_LABELS };

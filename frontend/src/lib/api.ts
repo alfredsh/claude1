@@ -1,6 +1,8 @@
 import axios from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
+// Base URL for static files (uploads) served by the backend
+export const BACKEND_URL = API_URL.replace(/\/api$/, '')
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -66,6 +68,7 @@ export const medicalDocAPI = {
   }),
   getAll: () => api.get('/medical'),
   delete: (id: string) => api.delete(`/medical/${id}`),
+  reanalyze: (id: string) => api.post(`/medical/${id}/reanalyze`),
 }
 
 // AI
@@ -85,4 +88,5 @@ export const doctorAPI = {
   addPrescription: (data: any) => api.post('/doctor/prescriptions', data),
   addRecommendation: (data: any) => api.post('/doctor/recommendations', data),
   analyzePatient: (id: string) => api.post(`/doctor/patients/${id}/analyze`),
+  getPatientDocs: (id: string) => api.get(`/doctor/patients/${id}/documents`),
 }

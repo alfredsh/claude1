@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { medicalDocAPI } from '@/lib/api'
+import { medicalDocAPI, BACKEND_URL } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   FileHeart, Upload, ChevronDown, ChevronUp, Brain,
   Plus, Loader2, Trash2, Activity, Scan, Microscope, Wind, Radiation, FileText,
+  RefreshCw, ImageIcon, X,
 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
@@ -119,21 +120,29 @@ const renderMeasurements = (docType: string, data: any) => {
   )
 }
 
+const IMAGE_EXTS = ['.jpg', '.jpeg', '.png']
+const isImageFile = (url?: string) => url ? IMAGE_EXTS.some(ext => url.toLowerCase().endsWith(ext)) : false
+
 export default function MedicalDocuments() {
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [reanalyzing, setReanalyzing] = useState<string | null>(null)
+  const [typeFilter, setTypeFilter] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [docType, setDocType] = useState('ECG')
   const [docDate, setDocDate] = useState('')
   const [file, setFile] = useState<File | null>(null)
 
-  const { data: docs = [] } = useQuery({
+  const { data: allDocs = [] } = useQuery({
     queryKey: ['medical-docs'],
     queryFn: () => medicalDocAPI.getAll().then(r => r.data),
     refetchInterval: 5000,
   })
+
+  const docs = typeFilter ? allDocs.filter((d: any) => d.docType === typeFilter) : allDocs
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -171,6 +180,20 @@ export default function MedicalDocuments() {
       toast({ title: 'Ошибка удаления', variant: 'destructive' })
     } finally {
       setDeleting(null)
+    }
+  }
+
+  const handleReanalyze = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setReanalyzing(id)
+    try {
+      await medicalDocAPI.reanalyze(id)
+      qc.invalidateQueries({ queryKey: ['medical-docs'] })
+      toast({ title: 'Анализ запущен повторно', description: 'ИИ обработает документ ещё раз…' })
+    } catch {
+      toast({ title: 'Ошибка', variant: 'destructive' })
+    } finally {
+      setReanalyzing(null)
     }
   }
 
@@ -261,14 +284,52 @@ export default function MedicalDocuments() {
         </Card>
       )}
 
+      {/* Type filter chips */}
+      {allDocs.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setTypeFilter(null)}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+              typeFilter === null
+                ? 'bg-primary text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Все ({allDocs.length})
+          </button>
+          {DOC_TYPES.map(({ value, label, icon: Icon, color }) => {
+            const count = allDocs.filter((d: any) => d.docType === value).length
+            if (!count) return null
+            return (
+              <button
+                key={value}
+                onClick={() => setTypeFilter(typeFilter === value ? null : value)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  typeFilter === value
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${typeFilter === value ? 'text-white' : color.split(' ')[0]}`} />
+                {label} ({count})
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {docs.length === 0 ? (
         <div className="text-center py-20">
           <FileHeart className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-slate-700 mb-2">Исследований нет</h3>
+          <h3 className="text-lg font-semibold text-slate-700 mb-2">
+            {typeFilter ? 'Документов этого типа нет' : 'Исследований нет'}
+          </h3>
           <p className="text-slate-500 mb-6">Загрузите ЭКГ, УЗИ, КТ, МРТ или другой документ</p>
-          <Button variant="gradient" onClick={() => setShowForm(true)} className="gap-2">
-            <Plus className="w-4 h-4" /> Загрузить документ
-          </Button>
+          {!typeFilter && (
+            <Button variant="gradient" onClick={() => setShowForm(true)} className="gap-2">
+              <Plus className="w-4 h-4" /> Загрузить документ
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -277,6 +338,7 @@ export default function MedicalDocuments() {
             const DocIcon = meta.icon
             const isExpanded = expanded === doc.id
             const measurements = doc.measurements && typeof doc.measurements === 'object' ? doc.measurements : null
+            const hasImage = isImageFile(doc.fileUrl)
 
             return (
               <Card key={doc.id} className="overflow-hidden">
@@ -293,21 +355,48 @@ export default function MedicalDocuments() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-semibold text-slate-900">{doc.title}</p>
                           <Badge variant="outline" className="text-xs">{meta.label}</Badge>
+                          {hasImage && (
+                            <Badge variant="outline" className="text-xs text-slate-400 gap-1 flex items-center">
+                              <ImageIcon className="w-3 h-3" /> фото
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-slate-500 mt-0.5">{formatDate(doc.docDate)}</p>
-                        <div className="mt-2">
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
                           <Badge
                             variant={doc.status === 'completed' ? 'success' : doc.status === 'processing' ? 'warning' : 'outline'}
                             className="text-xs"
                           >
                             {doc.status === 'completed' ? '✓ Обработан' : doc.status === 'processing'
                               ? <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Анализирую…</span>
-                              : doc.status === 'error' ? '⚠ Ошибка' : 'Ожидание'}
+                              : doc.status === 'error' ? '⚠ Ошибка анализа' : 'Ожидание'}
                           </Badge>
+                          {doc.status === 'error' && (
+                            <button
+                              onClick={e => handleReanalyze(doc.id, e)}
+                              disabled={reanalyzing === doc.id}
+                              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                              title="Повторить анализ"
+                            >
+                              {reanalyzing === doc.id
+                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                : <RefreshCw className="w-3 h-3" />}
+                              Повторить анализ
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
+                      {hasImage && doc.fileUrl && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setPreviewUrl(BACKEND_URL + doc.fileUrl) }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                          title="Просмотр изображения"
+                        >
+                          <ImageIcon className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={e => handleDelete(doc.id, e)}
                         disabled={deleting === doc.id}
@@ -325,6 +414,18 @@ export default function MedicalDocuments() {
 
                 {isExpanded && (
                   <div className="border-t border-slate-100 p-5 space-y-4">
+                    {/* Image preview inline */}
+                    {hasImage && doc.fileUrl && (
+                      <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                        <img
+                          src={BACKEND_URL + doc.fileUrl}
+                          alt={doc.title}
+                          className="w-full max-h-64 object-contain cursor-zoom-in"
+                          onClick={() => setPreviewUrl(BACKEND_URL + doc.fileUrl)}
+                        />
+                      </div>
+                    )}
+
                     {measurements && renderMeasurements(doc.docType, measurements)}
 
                     {doc.aiSummary && (
@@ -343,11 +444,48 @@ export default function MedicalDocuments() {
                         ИИ анализирует документ, обычно занимает 10–30 секунд…
                       </div>
                     )}
+
+                    {doc.status === 'error' && !doc.aiSummary && (
+                      <div className="flex items-center justify-between bg-red-50 rounded-xl p-3 border border-red-100">
+                        <p className="text-sm text-red-700">ИИ не смог обработать документ</p>
+                        <button
+                          onClick={e => handleReanalyze(doc.id, e)}
+                          disabled={reanalyzing === doc.id}
+                          className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
+                        >
+                          {reanalyzing === doc.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <RefreshCw className="w-3.5 h-3.5" />}
+                          Повторить анализ
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </Card>
             )
           })}
+        </div>
+      )}
+
+      {/* Full-screen image preview modal */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white/80 hover:text-white p-2 rounded-full bg-black/40"
+            onClick={() => setPreviewUrl(null)}
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img
+            src={previewUrl}
+            alt="Просмотр документа"
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
