@@ -233,4 +233,69 @@ const getAISettings = async (req, res) => {
   });
 };
 
-module.exports = { chat, getChatSessions, getChatSession, generateRecommendations, getAISettings };
+// POST /api/ai/supplements/recommend
+const generateSupplementRecommendations = async (req, res) => {
+  try {
+    const profile = await prisma.patientProfile.findUnique({
+      where: { userId: req.user.id },
+      include: {
+        labResults:       { include: { parameters: true }, orderBy: { testDate: 'desc' }, take: 5 },
+        healthMetrics:    { orderBy: { recordedAt: 'desc' }, take: 20 },
+        supplements:      { where: { isActive: true } },
+        nutritionLogs:    { orderBy: { loggedAt: 'desc' }, take: 14 },
+        medicalDocuments: { orderBy: { docDate: 'desc' }, take: 5 },
+      },
+    });
+    if (!profile) return res.status(404).json({ error: 'Профиль не найден' });
+
+    const context = buildPatientContext(profile);
+
+    // Nutrition averages
+    const nutritionLines = [];
+    if (profile.nutritionLogs?.length) {
+      const avg = (key) => {
+        const vals = profile.nutritionLogs.map(x => x[key]).filter(Boolean);
+        return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+      };
+      const avgCal = avg('calories'), avgP = avg('protein'), avgF = avg('fats'), avgC = avg('carbs');
+      if (avgCal) nutritionLines.push(`Среднее КБЖУ за ${profile.nutritionLogs.length} записей: ${avgCal} ккал, белки ${avgP}г, жиры ${avgF}г, углеводы ${avgC}г`);
+    }
+
+    const medDocLines = [];
+    if (profile.medicalDocuments?.length) {
+      profile.medicalDocuments.forEach(d => {
+        if (d.aiSummary) medDocLines.push(`${d.docType} «${d.title}»: ${d.aiSummary.substring(0, 200)}`);
+      });
+    }
+
+    const fullContext = [
+      context,
+      nutritionLines.length ? `\nПИТАНИЕ:\n${nutritionLines.join('\n')}` : '',
+      medDocLines.length ? `\nМЕДИЦИНСКИЕ ИССЛЕДОВАНИЯ:\n${medDocLines.join('\n')}` : '',
+    ].filter(Boolean).join('\n');
+
+    const ai = getAIClient();
+    const completion = await ai.chat.completions.create({
+      model: AI_MODEL,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPTS.supplementAdvisor },
+        {
+          role: 'user',
+          content: `Составь персонализированные рекомендации по нутриентам и добавкам на основе данных пациента. Верни JSON объект с полем "recommendations" — массив объектов:\n- name: название нутриента/добавки\n- dosage: дозировка с единицей измерения (например "2000 МЕ", "400 мг")\n- frequency: как принимать (например "1 раз в день во время еды")\n- reason: обоснование 2-3 предложения со ссылкой на конкретные показатели пациента\n- category: витамин | минерал | омега | аминокислота | пробиотик | адаптоген | другое\n- priority: high | medium | low\n\nМаксимум 8 рекомендаций. Обосновывай каждую конкретными данными.\n\nДанные пациента:\n${fullContext}`,
+        },
+      ],
+      max_tokens: 2500,
+      response_format: { type: 'json_object' },
+    });
+
+    const parsed = JSON.parse(completion.choices[0].message.content);
+    const recommendations = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
+
+    res.json({ recommendations, generatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Supplement recommendations error:', err);
+    res.status(500).json({ error: 'Ошибка генерации рекомендаций по нутриентам' });
+  }
+};
+
+module.exports = { chat, getChatSessions, getChatSession, generateRecommendations, getAISettings, generateSupplementRecommendations };
