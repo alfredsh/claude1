@@ -33,6 +33,9 @@ export default function LandingPage() {
             <span className="font-bold text-slate-900 text-lg">HealthTwin</span>
           </div>
           <div className="flex items-center gap-3">
+            <Link to="/guide" className="text-sm text-slate-500 hover:text-slate-800 hidden sm:inline">
+              📖 Руководство
+            </Link>
             <Link to="/login">
               <Button variant="ghost" size="sm">Войти</Button>
             </Link>
@@ -330,6 +333,11 @@ export default function LandingPage() {
           <span className="text-white font-semibold">HealthTwin</span>
         </div>
         <p>© 2025 HealthTwin — Цифровой Двойник Здоровья. Платформа не заменяет медицинскую консультацию.</p>
+        <p className="mt-2">
+          <Link to="/guide" className="text-slate-500 hover:text-slate-300 underline underline-offset-2">
+            Руководство пользователя
+          </Link>
+        </p>
       </footer>
     </div>
   )

@@ -72,6 +72,11 @@ export default function LoginPage() {
             Нет аккаунта?{' '}
             <Link to="/register" className="text-primary font-medium hover:underline">Зарегистрироваться</Link>
           </p>
+          <p className="text-center mt-3">
+            <Link to="/guide" className="text-xs text-slate-400 hover:text-slate-600 hover:underline inline-flex items-center gap-1">
+              📖 Руководство пользователя
+            </Link>
+          </p>
         </div>
       </div>
     </div>

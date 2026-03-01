@@ -6,6 +6,7 @@ import { Toaster } from './components/ui/toaster'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import GuidePage from './pages/GuidePage'
 import PatientLayout from './components/layout/PatientLayout'
 import DoctorLayout from './components/layout/DoctorLayout'
 
@@ -48,6 +49,7 @@ export default function App() {
         } />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/guide" element={<GuidePage />} />
 
         {/* Patient routes */}
         <Route path="/patient" element={
