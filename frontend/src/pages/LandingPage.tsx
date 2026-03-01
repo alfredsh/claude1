@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Heart, Brain, FlaskConical, Activity, Users, Shield, ArrowRight, CheckCircle, Zap, Star } from 'lucide-react'
+import { Heart, Brain, FlaskConical, Activity, Users, Shield, ArrowRight, CheckCircle, Zap, Star, Smartphone, Download, Share2, Plus, Wifi } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const features = [
@@ -153,6 +153,173 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* PWA / Mobile App */}
+      <section className="py-20 px-4 sm:px-6 overflow-hidden relative">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-blue-950 to-teal-950 -z-10" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-blue-500/10 rounded-full blur-3xl -z-10" />
+
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+            className="text-center mb-14">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-sm font-medium mb-6">
+              <Smartphone className="w-4 h-4" />
+              Мобильное приложение
+            </div>
+            <h2 className="text-4xl font-extrabold text-white mb-4">
+              Установите{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-400">
+                HealthTwin
+              </span>{' '}
+              на смартфон
+            </h2>
+            <p className="text-slate-400 max-w-xl mx-auto text-lg">
+              Без App Store и Google Play — работает как нативное приложение прямо из браузера
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            {/* Перки */}
+            <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
+              className="space-y-4 lg:pt-8">
+              {[
+                { icon: Download, title: 'Без магазинов приложений', desc: 'Устанавливается прямо из браузера одним нажатием' },
+                { icon: Wifi, title: 'Работает офлайн', desc: 'Просматривайте данные даже без интернета' },
+                { icon: Zap, title: 'Как нативное приложение', desc: 'Полноэкранный режим, уведомления, иконка на рабочем столе' },
+              ].map(({ icon: Icon, title, desc }, i) => (
+                <div key={i} className="flex gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-white font-medium text-sm">{title}</p>
+                    <p className="text-slate-400 text-xs mt-0.5 leading-relaxed">{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </motion.div>
+
+            {/* Телефон-макет */}
+            <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+              transition={{ delay: 0.15 }}
+              className="flex justify-center">
+              <div className="relative">
+                {/* Свечение */}
+                <div className="absolute inset-0 bg-gradient-to-b from-blue-500/30 to-teal-500/30 rounded-[3rem] blur-2xl scale-110" />
+                {/* Корпус телефона */}
+                <div className="relative w-52 bg-slate-800 rounded-[2.5rem] border-4 border-slate-700 shadow-2xl overflow-hidden">
+                  {/* Экран */}
+                  <div className="bg-gradient-to-b from-blue-600 to-teal-600 h-96 p-4 flex flex-col">
+                    {/* Статусбар */}
+                    <div className="flex justify-between items-center text-white/70 text-[10px] mb-3 px-1">
+                      <span>9:41</span>
+                      <div className="flex gap-1 items-center">
+                        <Wifi className="w-3 h-3" />
+                        <div className="w-5 h-2.5 border border-white/70 rounded-sm relative">
+                          <div className="absolute inset-0.5 right-0.5 bg-white/70 rounded-sm" />
+                        </div>
+                      </div>
+                    </div>
+                    {/* Шапка */}
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                        <Heart className="w-4 h-4 text-white" />
+                      </div>
+                      <span className="text-white font-bold text-sm">HealthTwin</span>
+                    </div>
+                    {/* Карточки-заглушки */}
+                    <div className="space-y-2 flex-1">
+                      <div className="bg-white/20 rounded-xl p-3">
+                        <div className="h-2 w-20 bg-white/40 rounded mb-2" />
+                        <div className="h-6 w-16 bg-white/60 rounded font-bold" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-white/20 rounded-xl p-3">
+                          <div className="h-2 w-12 bg-white/40 rounded mb-2" />
+                          <div className="h-4 w-8 bg-white/60 rounded" />
+                        </div>
+                        <div className="bg-white/20 rounded-xl p-3">
+                          <div className="h-2 w-12 bg-white/40 rounded mb-2" />
+                          <div className="h-4 w-8 bg-white/60 rounded" />
+                        </div>
+                      </div>
+                      <div className="bg-white/20 rounded-xl p-3">
+                        <div className="h-2 w-24 bg-white/40 rounded mb-2" />
+                        <div className="h-2 w-full bg-white/20 rounded" />
+                        <div className="h-2 w-3/4 bg-white/20 rounded mt-1" />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Нижняя часть телефона */}
+                  <div className="bg-slate-800 h-8 flex items-center justify-center">
+                    <div className="w-24 h-1 bg-slate-600 rounded-full" />
+                  </div>
+                </div>
+                {/* Значок установки */}
+                <div className="absolute -top-3 -right-3 w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl shadow-lg flex items-center justify-center border-2 border-white/20">
+                  <Download className="w-5 h-5 text-white" />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Инструкции */}
+            <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="space-y-5 lg:pt-8">
+              {/* Android */}
+              <div className="p-5 rounded-2xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                    <span className="text-green-400 text-lg">🤖</span>
+                  </div>
+                  <p className="text-white font-semibold">Android / Chrome</p>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { icon: '1', text: 'Откройте сайт в Chrome' },
+                    { icon: '2', text: 'Нажмите меню ⋮ в правом углу' },
+                    { icon: '3', text: 'Выберите «Добавить на главный экран»' },
+                    { icon: '4', text: 'Нажмите «Установить» — готово!' },
+                  ].map(({ icon, text }) => (
+                    <div key={icon} className="flex items-center gap-3">
+                      <div className="w-6 h-6 rounded-full bg-green-500/30 text-green-400 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                        {icon}
+                      </div>
+                      <p className="text-slate-300 text-sm">{text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* iOS */}
+              <div className="p-5 rounded-2xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                    <span className="text-blue-400 text-lg">🍎</span>
+                  </div>
+                  <p className="text-white font-semibold">iPhone / Safari</p>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { icon: '1', text: 'Откройте сайт в Safari' },
+                    { icon: '2', text: (<span>Нажмите кнопку <Share2 className="w-3.5 h-3.5 inline text-blue-400" /> «Поделиться»</span>) },
+                    { icon: '3', text: (<span>Выберите <Plus className="w-3.5 h-3.5 inline text-blue-400" /> «На экран Домой»</span>) },
+                    { icon: '4', text: 'Нажмите «Добавить» — готово!' },
+                  ].map(({ icon, text }) => (
+                    <div key={icon} className="flex items-center gap-3">
+                      <div className="w-6 h-6 rounded-full bg-blue-500/30 text-blue-400 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                        {icon}
+                      </div>
+                      <p className="text-slate-300 text-sm">{text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
           </div>
         </div>
       </section>
