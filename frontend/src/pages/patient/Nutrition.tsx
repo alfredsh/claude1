@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Utensils, Plus, TrendingUp, Camera, Loader2, Sparkles, X, ImageIcon,
-  BookOpen, CheckCircle, AlertTriangle, XCircle, Star, Flame, ChevronDown, ChevronUp, Link as LinkIcon, Upload,
+  BookOpen, CheckCircle, AlertTriangle, XCircle, Star, Flame, ChevronDown, ChevronUp, Link as LinkIcon, Upload, RefreshCw,
 } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
@@ -61,12 +61,14 @@ export default function Nutrition() {
   // Menu analysis state
   const [showMenuModal, setShowMenuModal] = useState(false)
   const [menuTab, setMenuTab] = useState<'photo' | 'url'>('photo')
-  const [menuPreview, setMenuPreview] = useState<string | null>(null)
+  const [menuFiles, setMenuFiles] = useState<File[]>([])
+  const [menuPreviews, setMenuPreviews] = useState<string[]>([])
   const [menuAnalyzing, setMenuAnalyzing] = useState(false)
   const [menuResult, setMenuResult] = useState<MenuAnalysis & { source?: string } | null>(null)
   const [menuFilter, setMenuFilter] = useState<'all' | 'recommended' | 'moderate' | 'avoid'>('all')
   const [showAllItems, setShowAllItems] = useState(false)
   const [menuUrl, setMenuUrl] = useState('')
+  const [menuAttempt, setMenuAttempt] = useState(1)
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
@@ -144,16 +146,30 @@ export default function Nutrition() {
     setAiMeta(null)
   }
 
-  const handleMenuPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setMenuPreview(URL.createObjectURL(file))
+  const addMenuPhotos = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    setMenuFiles(prev => [...prev, ...files])
+    setMenuPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))])
     setMenuResult(null)
+    e.target.value = ''
+  }
+
+  const removeMenuPhoto = (idx: number) => {
+    setMenuFiles(prev => prev.filter((_, i) => i !== idx))
+    setMenuPreviews(prev => prev.filter((_, i) => i !== idx))
+    setMenuResult(null)
+  }
+
+  const runMenuPhotoAnalysis = async (attempt: number) => {
+    if (!menuFiles.length) return
     setMenuAnalyzing(true)
+    setMenuAttempt(attempt)
     setShowAllItems(false)
     try {
       const fd = new FormData()
-      fd.append('photo', file)
+      menuFiles.forEach(f => fd.append('photos', f))
+      fd.append('attempt', String(attempt))
       const res = await patientAPI.analyzeMenuPhoto(fd)
       setMenuResult(res.data)
     } catch (err: any) {
@@ -162,22 +178,19 @@ export default function Nutrition() {
         description: err.response?.data?.error || 'Попробуйте сделать более чёткое фото',
         variant: 'destructive',
       })
-      setMenuPreview(null)
     } finally {
       setMenuAnalyzing(false)
-      if (menuInputRef.current) menuInputRef.current.value = ''
-      if (menuGalleryInputRef.current) menuGalleryInputRef.current.value = ''
     }
   }
 
-  const handleMenuUrl = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const runMenuUrlAnalysis = async (attempt: number) => {
     if (!menuUrl.trim()) return
-    setMenuResult(null)
     setMenuAnalyzing(true)
+    setMenuAttempt(attempt)
+    setMenuResult(null)
     setShowAllItems(false)
     try {
-      const res = await patientAPI.analyzeMenuUrl(menuUrl.trim())
+      const res = await patientAPI.analyzeMenuUrl(menuUrl.trim(), attempt)
       setMenuResult(res.data)
     } catch (err: any) {
       toast({
@@ -192,22 +205,26 @@ export default function Nutrition() {
 
   const closeMenu = () => {
     setShowMenuModal(false)
-    setMenuPreview(null)
+    setMenuFiles([])
+    setMenuPreviews([])
     setMenuResult(null)
     setMenuAnalyzing(false)
     setMenuFilter('all')
     setShowAllItems(false)
     setMenuUrl('')
+    setMenuAttempt(1)
   }
 
   const switchMenuTab = (tab: 'photo' | 'url') => {
     setMenuTab(tab)
-    setMenuPreview(null)
+    setMenuFiles([])
+    setMenuPreviews([])
     setMenuResult(null)
     setMenuAnalyzing(false)
     setMenuFilter('all')
     setShowAllItems(false)
     setMenuUrl('')
+    setMenuAttempt(1)
   }
 
   const addLog = async (e: React.FormEvent) => {
@@ -300,51 +317,110 @@ export default function Nutrition() {
                 <input
                   ref={menuInputRef}
                   type="file"
-                  accept=".jpg,.jpeg,.png"
+                  accept="image/*"
                   capture="environment"
                   className="hidden"
-                  onChange={handleMenuPhoto}
+                  onChange={addMenuPhotos}
                 />
                 <input
                   ref={menuGalleryInputRef}
                   type="file"
-                  accept=".jpg,.jpeg,.png"
+                  accept="image/*"
+                  multiple
                   className="hidden"
-                  onChange={handleMenuPhoto}
+                  onChange={addMenuPhotos}
                 />
 
                 {/* ── Photo tab ── */}
-                {menuTab === 'photo' && !menuPreview && !menuAnalyzing && (
+                {menuTab === 'photo' && !menuAnalyzing && !menuResult && (
                   <div className="space-y-3">
-                    <button
-                      type="button"
-                      onClick={() => menuInputRef.current?.click()}
-                      className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all"
-                    >
-                      <Camera className="w-8 h-8 flex-shrink-0" />
-                      <div className="text-left">
-                        <p className="font-semibold text-sm">Сфотографировать меню</p>
-                        <p className="text-xs text-slate-400 mt-0.5">Открыть камеру и снять прямо сейчас</p>
+                    {/* Grid of added photos */}
+                    {menuPreviews.length > 0 && (
+                      <div className="grid grid-cols-3 gap-2">
+                        {menuPreviews.map((preview, idx) => (
+                          <div key={idx} className="relative aspect-[4/3] rounded-xl overflow-hidden border border-slate-200 shadow-sm group">
+                            <img src={preview} alt={`меню ${idx + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => removeMenuPhoto(idx)}
+                              className="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                        {/* Add more tile */}
+                        <button
+                          type="button"
+                          onClick={() => menuGalleryInputRef.current?.click()}
+                          className="aspect-[4/3] rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-1 text-slate-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all"
+                        >
+                          <Plus className="w-6 h-6" />
+                          <span className="text-xs font-medium">Ещё</span>
+                        </button>
                       </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => menuGalleryInputRef.current?.click()}
-                      className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all"
-                    >
-                      <Upload className="w-8 h-8 flex-shrink-0" />
-                      <div className="text-left">
-                        <p className="font-semibold text-sm">Загрузить фото из галереи</p>
-                        <p className="text-xs text-slate-400 mt-0.5">Выбрать уже сделанное фото меню</p>
+                    )}
+
+                    {/* Upload buttons — initial (no photos) */}
+                    {menuPreviews.length === 0 ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => menuInputRef.current?.click()}
+                          className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all"
+                        >
+                          <Camera className="w-8 h-8 flex-shrink-0" />
+                          <div className="text-left">
+                            <p className="font-semibold text-sm">Сфотографировать меню</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Открыть камеру и снять прямо сейчас</p>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => menuGalleryInputRef.current?.click()}
+                          className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all"
+                        >
+                          <Upload className="w-8 h-8 flex-shrink-0" />
+                          <div className="text-left">
+                            <p className="font-semibold text-sm">Загрузить из галереи</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Выбрать одно или несколько фото меню</p>
+                          </div>
+                        </button>
+                        <p className="text-xs text-slate-400 text-center pt-1">Можно добавить несколько фото если меню не помещается в одно</p>
+                      </>
+                    ) : (
+                      /* Add more — compact row when photos already exist */
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => menuInputRef.current?.click()}
+                          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all"
+                        >
+                          <Camera className="w-4 h-4" /> Камера
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => menuGalleryInputRef.current?.click()}
+                          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all"
+                        >
+                          <Upload className="w-4 h-4" /> Галерея
+                        </button>
                       </div>
-                    </button>
-                    <p className="text-xs text-slate-400 text-center pt-1">ИИ прочитает меню и учтёт ваше здоровье, активность, рацион и принимаемые БАД</p>
+                    )}
+
+                    {/* Analyze button */}
+                    {menuPreviews.length > 0 && (
+                      <Button variant="gradient" className="w-full gap-2" onClick={() => runMenuPhotoAnalysis(1)}>
+                        <Sparkles className="w-4 h-4" />
+                        Анализировать {menuPreviews.length > 1 ? `${menuPreviews.length} фото` : 'меню'}
+                      </Button>
+                    )}
                   </div>
                 )}
 
                 {/* ── URL tab ── */}
                 {menuTab === 'url' && !menuAnalyzing && !menuResult && (
-                  <form onSubmit={handleMenuUrl} className="space-y-4">
+                  <form onSubmit={(e) => { e.preventDefault(); runMenuUrlAnalysis(1) }} className="space-y-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-700">Ссылка на меню ресторана</label>
                       <div className="flex gap-2">
@@ -362,25 +438,31 @@ export default function Nutrition() {
                           <Sparkles className="w-4 h-4" /> Анализировать
                         </Button>
                       </div>
-                      <p className="text-xs text-slate-400">Вставьте ссылку на страницу с меню — ИИ её загрузит и проанализирует с учётом вашего здоровья</p>
+                      <p className="text-xs text-slate-400">Вставьте ссылку на страницу с меню — ИИ загрузит и проанализирует с учётом вашего здоровья</p>
                     </div>
                   </form>
                 )}
 
                 {menuAnalyzing && (
                   <div className="flex flex-col items-center gap-4 py-8">
-                    {menuPreview && (
-                      <img src={menuPreview} alt="menu" className="h-40 rounded-xl object-cover shadow-md" />
+                    {menuPreviews.length > 0 && (
+                      <div className="flex gap-2">
+                        {menuPreviews.slice(0, 4).map((p, i) => (
+                          <img key={i} src={p} alt="menu" className="h-16 w-20 rounded-lg object-cover shadow-sm border border-slate-200" />
+                        ))}
+                      </div>
                     )}
                     {menuTab === 'url' && menuUrl && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg text-xs text-slate-600 max-w-xs truncate">
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg text-xs text-slate-600 max-w-xs">
                         <LinkIcon className="w-3 h-3 flex-shrink-0" />
                         <span className="truncate">{menuUrl}</span>
                       </div>
                     )}
                     <div className="flex items-center gap-2 text-slate-600">
                       <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-                      <span className="text-sm font-medium">Анализирую меню с учётом вашего состояния...</span>
+                      <span className="text-sm font-medium">
+                        {menuAttempt > 1 ? 'Подбираю другой вариант...' : 'Анализирую меню с учётом вашего состояния...'}
+                      </span>
                     </div>
                     <p className="text-xs text-slate-400 text-center max-w-xs">
                       ИИ изучает ваши анализы, активность, БАД и рацион за сегодня
@@ -388,19 +470,22 @@ export default function Nutrition() {
                   </div>
                 )}
 
-                {(menuPreview || menuTab === 'url') && !menuAnalyzing && menuResult && (
+                {(menuPreviews.length > 0 || menuTab === 'url') && !menuAnalyzing && menuResult && (
                   <div className="space-y-5">
-                    {/* Source */}
-                    {menuTab === 'photo' && menuPreview && (
-                      <div className="flex items-center gap-3">
-                        <img src={menuPreview} alt="menu" className="h-16 w-24 rounded-xl object-cover border border-slate-200 shadow-sm" />
+                    {/* Source + re-analyze controls */}
+                    {menuTab === 'photo' && menuPreviews.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex gap-2 flex-wrap">
+                          {menuPreviews.slice(0, 5).map((p, i) => (
+                            <img key={i} src={p} alt={`menu ${i + 1}`} className="h-14 w-20 rounded-lg object-cover border border-slate-200 shadow-sm" />
+                          ))}
+                        </div>
                         <div className="flex items-center gap-3">
-                          <button type="button" onClick={() => menuInputRef.current?.click()} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-                            <Camera className="w-3 h-3" /> Сфотографировать
-                          </button>
-                          <span className="text-slate-300">|</span>
-                          <button type="button" onClick={() => menuGalleryInputRef.current?.click()} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-                            <Upload className="w-3 h-3" /> Загрузить другое
+                          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => runMenuPhotoAnalysis(menuAttempt + 1)}>
+                            <RefreshCw className="w-3.5 h-3.5" /> Другой вариант
+                          </Button>
+                          <button type="button" onClick={() => setMenuResult(null)} className="text-xs text-slate-400 hover:text-slate-600">
+                            Изменить фото
                           </button>
                         </div>
                       </div>
@@ -408,8 +493,13 @@ export default function Nutrition() {
                     {menuTab === 'url' && menuResult?.source && (
                       <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600">
                         <LinkIcon className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                        <span className="font-medium">{menuResult.source}</span>
-                        <button onClick={() => switchMenuTab('url')} className="ml-auto text-blue-600 hover:underline">Другая ссылка</button>
+                        <span className="font-medium truncate flex-1">{menuResult.source}</span>
+                        <Button variant="outline" size="sm" className="gap-1 text-xs h-6 px-2 shrink-0" onClick={() => runMenuUrlAnalysis(menuAttempt + 1)}>
+                          <RefreshCw className="w-3 h-3" /> Другой вариант
+                        </Button>
+                        <button onClick={() => { setMenuResult(null); setMenuAttempt(1) }} className="text-blue-600 hover:underline shrink-0">
+                          Изменить
+                        </button>
                       </div>
                     )}
 

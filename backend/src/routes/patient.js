@@ -17,7 +17,7 @@ router.get('/metrics', getHealthMetrics);
 router.get('/supplements', getSupplements);
 router.get('/recommendations', getRecommendations);
 router.post('/nutrition/analyze-photo', upload.single('photo'), analyzeNutritionPhoto);
-router.post('/nutrition/analyze-menu', upload.single('photo'), analyzeMenuPhoto);
+router.post('/nutrition/analyze-menu', upload.array('photos', 8), analyzeMenuPhoto);
 router.post('/nutrition/analyze-menu-url', analyzeMenuUrl);
 router.post('/nutrition', addNutritionLog);
 router.get('/nutrition', getNutritionLogs);
