@@ -51,6 +51,7 @@ app.use('/api/patient', require('./routes/patient'));
 app.use('/api/lab', require('./routes/lab'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/doctor', require('./routes/doctor'));
+app.use('/api/medical', require('./routes/medicalDoc'));
 
 // Health check
 app.get('/health', (req, res) => {

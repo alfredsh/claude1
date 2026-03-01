@@ -59,6 +59,15 @@ export const labAPI = {
   delete: (id: string) => api.delete(`/lab/${id}`),
 }
 
+// Medical Documents
+export const medicalDocAPI = {
+  upload: (data: FormData) => api.post('/medical/upload', data, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  getAll: () => api.get('/medical'),
+  delete: (id: string) => api.delete(`/medical/${id}`),
+}
+
 // AI
 export const aiAPI = {
   chat: (data: any) => api.post('/ai/chat', data),

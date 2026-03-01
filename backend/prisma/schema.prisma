@@ -56,8 +56,9 @@ model PatientProfile {
   sleepHours      Float?
   stressLevel     Int?
 
-  labResults      LabResult[]
-  healthMetrics   HealthMetric[]
+  labResults       LabResult[]
+  medicalDocuments MedicalDocument[]
+  healthMetrics    HealthMetric[]
   recommendations Recommendation[]
   supplements     Supplement[]
   nutritionLogs   NutritionLog[]
@@ -119,6 +120,23 @@ enum ParameterStatus {
   NORMAL
   HIGH
   CRITICAL
+}
+
+model MedicalDocument {
+  id           String   @id @default(uuid())
+  patientId    String
+  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  docType      String   // ECG | ULTRASOUND | CT | MRI | SPIROMETRY | XRAY | OTHER
+  title        String
+  docDate      DateTime
+  fileUrl      String?
+  aiSummary    String?
+  measurements Json?    // structured key measurements (ECG intervals, spirometry values, organ sizes…)
+  status       String   @default("pending") // pending | processing | completed | error
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model HealthMetric {
