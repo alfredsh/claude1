@@ -12,9 +12,10 @@ const chat = async (req, res) => {
       const profile = await prisma.patientProfile.findUnique({
         where: { userId: req.user.id },
         include: {
-          labResults: { orderBy: { testDate: 'desc' }, take: 3, include: { parameters: true } },
-          healthMetrics: { orderBy: { recordedAt: 'desc' }, take: 10 },
-          supplements: { where: { isActive: true } },
+          labResults:       { orderBy: { testDate: 'desc' }, take: 3, include: { parameters: true } },
+          medicalDocuments: { orderBy: { docDate: 'desc' }, take: 5, select: { docType: true, title: true, docDate: true, aiSummary: true } },
+          healthMetrics:    { orderBy: { recordedAt: 'desc' }, take: 10 },
+          supplements:      { where: { isActive: true } },
         },
       });
 
@@ -124,6 +125,15 @@ const buildPatientContext = (profile) => {
       return `  - ${lab.testName} (${dateStr}): ${params}`;
     });
     lines.push(`Последние анализы:\n${labLines.join('\n')}`);
+  }
+
+  if (profile.medicalDocuments?.length) {
+    const docLines = profile.medicalDocuments.map((d) => {
+      const dateStr = new Date(d.docDate).toLocaleDateString('ru-RU');
+      const summary = d.aiSummary ? d.aiSummary.substring(0, 200) : 'заключение обрабатывается';
+      return `  - ${d.docType} "${d.title}" (${dateStr}): ${summary}`;
+    });
+    lines.push(`Медицинские исследования:\n${docLines.join('\n')}`);
   }
 
   return lines.join('\n');

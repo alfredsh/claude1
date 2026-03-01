@@ -18,6 +18,7 @@ import AICoach from './pages/patient/AICoach'
 import Nutrition from './pages/patient/Nutrition'
 import Supplements from './pages/patient/Supplements'
 import PatientRecommendations from './pages/patient/Recommendations'
+import MedicalDocuments from './pages/patient/MedicalDocuments'
 
 // Doctor pages
 import DoctorDashboard from './pages/doctor/Dashboard'
@@ -60,6 +61,7 @@ export default function App() {
           <Route path="nutrition" element={<Nutrition />} />
           <Route path="supplements" element={<Supplements />} />
           <Route path="recommendations" element={<PatientRecommendations />} />
+          <Route path="documents" element={<MedicalDocuments />} />
         </Route>
 
         {/* Doctor routes */}
