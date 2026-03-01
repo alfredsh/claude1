@@ -2,7 +2,7 @@ const prisma = require('../config/database');
 const path = require('path');
 const fs = require('fs');
 const fetch = require('node-fetch');
-const { getAIClient } = require('../config/ai');
+const { getAIClient, AI_MODEL } = require('../config/ai');
 
 const getProfile = async (req, res) => {
   try {
@@ -248,7 +248,7 @@ const analyzeMenuPhoto = async (req, res) => {
 
     const ai = getAIClient();
     const completion = await ai.chat.completions.create({
-      model: 'gpt-4o',
+      model: AI_MODEL,
       messages: [
         {
           role: 'system',
@@ -459,7 +459,7 @@ const analyzeMenuUrl = async (req, res) => {
 
     const ai = getAIClient();
     const completion = await ai.chat.completions.create({
-      model: 'gpt-4o',
+      model: AI_MODEL,
       messages: [
         {
           role: 'system',
@@ -501,10 +501,16 @@ const analyzeMenuUrl = async (req, res) => {
         },
       ],
       max_tokens: 2000,
-      response_format: { type: 'json_object' },
     });
 
-    const parsed = JSON.parse(completion.choices[0].message.content);
+    const rawContent = completion.choices[0].message.content;
+    // Extract JSON from the response (handle providers that wrap JSON in markdown)
+    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('Menu URL analysis: no JSON in response:', rawContent.slice(0, 200));
+      return res.status(422).json({ error: 'Не удалось разобрать ответ ИИ. Попробуйте снова.' });
+    }
+    const parsed = JSON.parse(jsonMatch[0]);
     if (parsed.error === 'not_menu') {
       return res.status(422).json({ error: 'На странице не найдено меню ресторана' });
     }
@@ -519,8 +525,9 @@ const analyzeMenuUrl = async (req, res) => {
       source:         parsedUrl.hostname,
     });
   } catch (err) {
-    console.error('Menu URL analysis error:', err);
-    res.status(500).json({ error: 'Ошибка анализа меню' });
+    console.error('Menu URL analysis error:', err?.message || err);
+    const detail = process.env.NODE_ENV !== 'production' ? ` (${err?.message})` : '';
+    res.status(500).json({ error: `Ошибка анализа меню${detail}` });
   }
 };
 
