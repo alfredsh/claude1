@@ -80,6 +80,7 @@ export const aiAPI = {
   getSessions: () => api.get('/ai/chat/sessions'),
   getSession: (id: string) => api.get(`/ai/chat/sessions/${id}`),
   generateRecommendations: () => api.post('/ai/recommendations/generate'),
+  recommendSupplements: () => api.post('/ai/supplements/recommend'),
   getSettings: () => api.get('/ai/settings'),
 }
 
