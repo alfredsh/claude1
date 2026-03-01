@@ -35,22 +35,37 @@ export function getBMICategory(bmi: number) {
   return { label: 'Ожирение', color: 'text-red-600' }
 }
 
+export function computeParameterStatus(
+  value: number,
+  normalMin: number | null,
+  normalMax: number | null,
+): string {
+  const hasMin = normalMin !== null && normalMin !== undefined
+  const hasMax = normalMax !== null && normalMax !== undefined
+  if (!hasMin && !hasMax) return 'NORMAL'
+  if (hasMax && value > normalMax! * 1.2) return 'CRITICAL'
+  if (hasMin && value < normalMin! * 0.8) return 'CRITICAL'
+  if (hasMax && value > normalMax!) return 'HIGH'
+  if (hasMin && value < normalMin!) return 'LOW'
+  return 'NORMAL'
+}
+
 export function getStatusColor(status: string) {
   switch (status?.toUpperCase()) {
-    case 'CRITICAL': return 'text-red-600 bg-red-50 border-red-200'
-    case 'HIGH': return 'text-orange-600 bg-orange-50 border-orange-200'
-    case 'LOW': return 'text-yellow-600 bg-yellow-50 border-yellow-200'
-    case 'NORMAL': return 'text-green-600 bg-green-50 border-green-200'
-    default: return 'text-slate-600 bg-slate-50 border-slate-200'
+    case 'CRITICAL': return 'text-red-700 bg-red-50 border-l-4 border-red-500'
+    case 'HIGH':     return 'text-orange-700 bg-orange-50 border-l-4 border-orange-500'
+    case 'LOW':      return 'text-yellow-700 bg-yellow-50 border-l-4 border-yellow-500'
+    case 'NORMAL':   return 'text-green-700 bg-green-50 border border-green-200'
+    default:         return 'text-slate-600 bg-slate-50 border border-slate-200'
   }
 }
 
 export function getStatusLabel(status: string) {
   switch (status?.toUpperCase()) {
-    case 'CRITICAL': return 'Критично'
-    case 'HIGH': return 'Выше нормы'
-    case 'LOW': return 'Ниже нормы'
-    case 'NORMAL': return 'Норма'
-    default: return status
+    case 'CRITICAL': return '⚠ Критично'
+    case 'HIGH':     return '↑ Выше нормы'
+    case 'LOW':      return '↓ Ниже нормы'
+    case 'NORMAL':   return '✓ Норма'
+    default:         return status
   }
 }
