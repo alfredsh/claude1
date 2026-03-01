@@ -36,11 +36,6 @@ export default function LoginPage() {
     }
   }
 
-  const fillDemo = (type: 'patient' | 'doctor') => {
-    setEmail(type === 'patient' ? 'patient@demo.ru' : 'doctor@demo.ru')
-    setPassword(type === 'patient' ? 'patient123' : 'doctor123')
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -72,18 +67,6 @@ export default function LoginPage() {
               Войти
             </Button>
           </form>
-
-          <div className="mt-6">
-            <p className="text-xs text-slate-500 text-center mb-3">Демо-аккаунты для быстрого входа:</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => fillDemo('patient')} className="text-xs p-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
-                👤 Пациент
-              </button>
-              <button onClick={() => fillDemo('doctor')} className="text-xs p-2 rounded-lg border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors">
-                👨‍⚕️ Врач
-              </button>
-            </div>
-          </div>
 
           <p className="text-center text-sm text-slate-600 mt-6">
             Нет аккаунта?{' '}
