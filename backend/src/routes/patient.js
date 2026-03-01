@@ -3,7 +3,7 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const {
   getProfile, updateProfile, addHealthMetric, getHealthMetrics,
   getSupplements, getRecommendations, addNutritionLog, getNutritionLogs, analyzeNutritionPhoto,
-  analyzeMenuPhoto,
+  analyzeMenuPhoto, analyzeMenuUrl,
 } = require('../controllers/patientController');
 const upload = require('../middleware/upload');
 
@@ -18,6 +18,7 @@ router.get('/supplements', getSupplements);
 router.get('/recommendations', getRecommendations);
 router.post('/nutrition/analyze-photo', upload.single('photo'), analyzeNutritionPhoto);
 router.post('/nutrition/analyze-menu', upload.single('photo'), analyzeMenuPhoto);
+router.post('/nutrition/analyze-menu-url', analyzeMenuUrl);
 router.post('/nutrition', addNutritionLog);
 router.get('/nutrition', getNutritionLogs);
 

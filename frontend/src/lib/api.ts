@@ -52,6 +52,7 @@ export const patientAPI = {
   analyzeMenuPhoto: (data: FormData) => api.post('/patient/nutrition/analyze-menu', data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
+  analyzeMenuUrl: (url: string) => api.post('/patient/nutrition/analyze-menu-url', { url }),
 }
 
 // Lab
