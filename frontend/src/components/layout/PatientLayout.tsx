@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import {
   LayoutDashboard, User, FlaskConical, Activity, Brain,
-  Utensils, Pill, Star, LogOut, Menu, X, ChevronRight, FileHeart
+  Utensils, Pill, Star, LogOut, Menu, X, ChevronRight, FileHeart, Stethoscope,
 } from 'lucide-react'
 import { AppLogo } from '@/components/AppLogo'
 import { useAuthStore } from '@/store/authStore'
@@ -19,6 +19,7 @@ const navItems = [
   { to: '/patient/supplements', icon: Pill, label: 'Добавки' },
   { to: '/patient/recommendations', icon: Star, label: 'Рекомендации' },
   { to: '/patient/documents', icon: FileHeart, label: 'Документы' },
+  { to: '/patient/specialists', icon: Stethoscope, label: 'Специалисты' },
 ]
 
 export default function PatientLayout() {

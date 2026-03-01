@@ -19,12 +19,14 @@ import Nutrition from './pages/patient/Nutrition'
 import Supplements from './pages/patient/Supplements'
 import PatientRecommendations from './pages/patient/Recommendations'
 import MedicalDocuments from './pages/patient/MedicalDocuments'
+import Specialists from './pages/patient/Specialists'
 
 // Doctor pages
 import DoctorDashboard from './pages/doctor/Dashboard'
 import PatientsList from './pages/doctor/PatientsList'
 import PatientDetail from './pages/doctor/PatientDetail'
 import DoctorAIAssistant from './pages/doctor/AIAssistant'
+import DoctorProfilePage from './pages/doctor/DoctorProfile'
 
 function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: string }) {
   const { isAuthenticated, user } = useAuthStore()
@@ -62,6 +64,7 @@ export default function App() {
           <Route path="supplements" element={<Supplements />} />
           <Route path="recommendations" element={<PatientRecommendations />} />
           <Route path="documents" element={<MedicalDocuments />} />
+          <Route path="specialists" element={<Specialists />} />
         </Route>
 
         {/* Doctor routes */}
@@ -74,6 +77,7 @@ export default function App() {
           <Route path="patients" element={<PatientsList />} />
           <Route path="patients/:id" element={<PatientDetail />} />
           <Route path="ai-assistant" element={<DoctorAIAssistant />} />
+          <Route path="profile" element={<DoctorProfilePage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

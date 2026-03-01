@@ -271,4 +271,39 @@ const getDoctorProfile = async (req, res) => {
   }
 };
 
-module.exports = { getPatients, getPatient, addPrescription, addDoctorRecommendation, analyzePatientAI, getDoctorProfile, getPatientDocs };
+const updateDoctorProfile = async (req, res) => {
+  try {
+    const {
+      firstName, lastName, phone, bio, experience,
+      city, clinic, consultationPrice, isAcceptingPatients,
+      languages, education, achievements, certifications, avatarUrl,
+    } = req.body;
+
+    const profile = await prisma.doctorProfile.update({
+      where: { userId: req.user.id },
+      data: {
+        ...(firstName !== undefined && { firstName }),
+        ...(lastName !== undefined && { lastName }),
+        ...(phone !== undefined && { phone }),
+        ...(bio !== undefined && { bio }),
+        ...(experience !== undefined && { experience: Number(experience) }),
+        ...(city !== undefined && { city }),
+        ...(clinic !== undefined && { clinic }),
+        ...(consultationPrice !== undefined && { consultationPrice: consultationPrice ? Number(consultationPrice) : null }),
+        ...(isAcceptingPatients !== undefined && { isAcceptingPatients: Boolean(isAcceptingPatients) }),
+        ...(languages !== undefined && { languages }),
+        ...(education !== undefined && { education }),
+        ...(achievements !== undefined && { achievements }),
+        ...(certifications !== undefined && { certifications }),
+        ...(avatarUrl !== undefined && { avatarUrl }),
+      },
+    });
+
+    res.json(profile);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка обновления профиля врача' });
+  }
+};
+
+module.exports = { getPatients, getPatient, addPrescription, addDoctorRecommendation, analyzePatientAI, getDoctorProfile, updateDoctorProfile, getPatientDocs };

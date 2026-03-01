@@ -87,10 +87,20 @@ export const aiAPI = {
 // Doctor
 export const doctorAPI = {
   getProfile: () => api.get('/doctor/profile'),
+  updateProfile: (data: any) => api.put('/doctor/profile', data),
   getPatients: (params?: any) => api.get('/doctor/patients', { params }),
   getPatient: (id: string) => api.get(`/doctor/patients/${id}`),
   addPrescription: (data: any) => api.post('/doctor/prescriptions', data),
   addRecommendation: (data: any) => api.post('/doctor/recommendations', data),
   analyzePatient: (id: string) => api.post(`/doctor/patients/${id}/analyze`),
   getPatientDocs: (id: string) => api.get(`/doctor/patients/${id}/documents`),
+}
+
+// Specialists (for patients to browse doctors)
+export const specialistsAPI = {
+  getAll: (params?: any) => api.get('/specialists', { params }),
+  getOne: (id: string) => api.get(`/specialists/${id}`),
+  selectDoctor: (id: string) => api.post(`/specialists/${id}/select`),
+  unselectDoctor: (id: string) => api.delete(`/specialists/${id}/select`),
+  getMyDoctors: () => api.get('/specialists/my'),
 }
