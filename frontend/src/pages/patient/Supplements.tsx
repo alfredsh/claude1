@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { patientAPI, aiAPI } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
@@ -32,10 +32,30 @@ const PRIORITY_LABEL: Record<string, string> = {
   low:    'низкий приоритет',
 }
 
+const STORAGE_KEY = 'supplement_ai_recs'
+
+const loadCached = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as { recommendations: any[]; generatedAt: string }
+  } catch {
+    return null
+  }
+}
+
 export default function Supplements() {
-  const [aiRecs, setAiRecs] = useState<any[]>([])
-  const [generatedAt, setGeneratedAt] = useState<string | null>(null)
+  const cached = loadCached()
+  const [aiRecs, setAiRecs] = useState<any[]>(cached?.recommendations ?? [])
+  const [generatedAt, setGeneratedAt] = useState<string | null>(cached?.generatedAt ?? null)
   const [generating, setGenerating] = useState(false)
+
+  // Keep localStorage in sync whenever recs change
+  useEffect(() => {
+    if (aiRecs.length > 0 && generatedAt) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ recommendations: aiRecs, generatedAt }))
+    }
+  }, [aiRecs, generatedAt])
 
   const { data: supplements = [] } = useQuery({
     queryKey: ['supplements'],
