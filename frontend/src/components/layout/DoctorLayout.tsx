@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { LayoutDashboard, Users, Brain, LogOut, Menu, X, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, Users, Brain, LogOut, Menu, X, ChevronRight, UserCircle } from 'lucide-react'
 import { AppLogo } from '@/components/AppLogo'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/doctor', icon: LayoutDashboard, label: 'Дашборд', end: true },
   { to: '/doctor/patients', icon: Users, label: 'Пациенты' },
   { to: '/doctor/ai-assistant', icon: Brain, label: 'ИИ-ассистент' },
+  { to: '/doctor/profile', icon: UserCircle, label: 'Мой профиль' },
 ]
 
 export default function DoctorLayout() {

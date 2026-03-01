@@ -63,6 +63,7 @@ model PatientProfile {
   supplements     Supplement[]
   nutritionLogs   NutritionLog[]
   geneticData     GeneticData?
+  doctors         PatientDoctor[]
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -80,6 +81,18 @@ model DoctorProfile {
   avatarUrl       String?
   bio             String?
   experience      Int?
+
+  // Extended public profile
+  education           Json?    // [{degree, institution, year, specialty}]
+  achievements        Json?    // [{title, year, issuer?}]
+  certifications      Json?    // [{name, issuer, year}]
+  languages           String[]
+  consultationPrice   Float?
+  isAcceptingPatients Boolean  @default(true)
+  city                String?
+  clinic              String?
+
+  patients        PatientDoctor[]
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -250,6 +263,17 @@ model Message {
   isRead         Boolean  @default(false)
 
   createdAt      DateTime @default(now())
+}
+
+model PatientDoctor {
+  id        String         @id @default(uuid())
+  patientId String
+  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId  String
+  doctor    DoctorProfile  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@unique([patientId, doctorId])
 }
 
 model ChatSession {
