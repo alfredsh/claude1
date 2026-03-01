@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { FlaskConical, Upload, ChevronDown, ChevronUp, Brain, Plus, Loader2, Trash2, Sparkles, FileText } from 'lucide-react'
-import { formatDate, getStatusColor, getStatusLabel } from '@/lib/utils'
+import { formatDate, getStatusColor, getStatusLabel, computeParameterStatus } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 
 export default function LabResults() {
@@ -213,7 +213,9 @@ export default function LabResults() {
         <div className="space-y-4">
           {results.map((result: any) => {
             const isExpanded = expanded === result.id
-            const abnormal = result.parameters?.filter((p: any) => p.status !== 'NORMAL') || []
+            const abnormal = (result.parameters || []).filter((p: any) =>
+              computeParameterStatus(p.value, p.normalMin, p.normalMax) !== 'NORMAL'
+            )
 
             return (
               <Card key={result.id} className="overflow-hidden">
@@ -268,20 +270,31 @@ export default function LabResults() {
                       <div>
                         <p className="text-sm font-semibold text-slate-700 mb-3">Параметры:</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {result.parameters.map((p: any) => (
-                            <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl border ${getStatusColor(p.status)}`}>
-                              <div>
-                                <p className="font-medium text-sm">{p.name}</p>
-                                {p.normalMin !== null && (
-                                  <p className="text-xs opacity-70">Норма: {p.normalMin}–{p.normalMax} {p.unit}</p>
-                                )}
+                          {result.parameters.map((p: any) => {
+                            const status = computeParameterStatus(p.value, p.normalMin, p.normalMax)
+                            const isAbnormal = status !== 'NORMAL'
+                            const hasMin = p.normalMin !== null && p.normalMin !== undefined
+                            const hasMax = p.normalMax !== null && p.normalMax !== undefined
+                            const rangeStr = hasMin && hasMax
+                              ? `${p.normalMin}–${p.normalMax}`
+                              : hasMax ? `до ${p.normalMax}`
+                              : hasMin ? `от ${p.normalMin}`
+                              : null
+                            return (
+                              <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${getStatusColor(status)}`}>
+                                <div>
+                                  <p className={`font-medium text-sm ${isAbnormal ? 'font-semibold' : ''}`}>{p.name}</p>
+                                  {rangeStr && (
+                                    <p className="text-xs opacity-70">Норма: {rangeStr} {p.unit}</p>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <p className={`font-bold ${isAbnormal ? 'text-base' : ''}`}>{p.value} {p.unit}</p>
+                                  <p className="text-xs font-medium">{getStatusLabel(status)}</p>
+                                </div>
                               </div>
-                              <div className="text-right">
-                                <p className="font-bold">{p.value} {p.unit}</p>
-                                <p className="text-xs">{getStatusLabel(p.status)}</p>
-                              </div>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       </div>
                     )}

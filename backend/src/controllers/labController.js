@@ -60,10 +60,13 @@ const uploadLabResult = async (req, res) => {
 };
 
 const getParameterStatus = (value, min, max) => {
-  if (min === null || min === undefined || max === null || max === undefined) return 'NORMAL';
-  if (value < min * 0.8 || value > max * 1.2) return 'CRITICAL';
-  if (value < min) return 'LOW';
-  if (value > max) return 'HIGH';
+  const hasMin = min !== null && min !== undefined && !isNaN(min);
+  const hasMax = max !== null && max !== undefined && !isNaN(max);
+  if (!hasMin && !hasMax) return 'NORMAL';
+  if (hasMax && value > max * 1.2) return 'CRITICAL';
+  if (hasMin && value < min * 0.8) return 'CRITICAL';
+  if (hasMax && value > max) return 'HIGH';
+  if (hasMin && value < min) return 'LOW';
   return 'NORMAL';
 };
 
