@@ -46,6 +46,9 @@ export const patientAPI = {
   getRecommendations: () => api.get('/patient/recommendations'),
   addNutrition: (data: any) => api.post('/patient/nutrition', data),
   getNutrition: (params?: any) => api.get('/patient/nutrition', { params }),
+  analyzeNutritionPhoto: (data: FormData) => api.post('/patient/nutrition/analyze-photo', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
 }
 
 // Lab
