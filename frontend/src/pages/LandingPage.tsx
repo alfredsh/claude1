@@ -28,9 +28,7 @@ export default function LandingPage() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl gradient-health flex items-center justify-center shadow-md">
-              <Heart className="w-5 h-5 text-white" />
-            </div>
+            <img src="/icon-192x192.png" alt="HealthTwin" className="w-9 h-9 rounded-xl shadow-md" />
             <span className="font-bold text-slate-900 text-lg">HealthTwin</span>
           </div>
           <div className="flex items-center gap-3">
@@ -226,9 +224,7 @@ export default function LandingPage() {
                     </div>
                     {/* Шапка */}
                     <div className="flex items-center gap-2 mb-4">
-                      <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
-                        <Heart className="w-4 h-4 text-white" />
-                      </div>
+                      <img src="/icon-192x192.png" alt="HealthTwin" className="w-7 h-7 rounded-lg shadow" />
                       <span className="text-white font-bold text-sm">HealthTwin</span>
                     </div>
                     {/* Карточки-заглушки */}
@@ -340,9 +336,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="py-8 px-4 bg-slate-900 text-slate-400 text-center text-sm">
         <div className="flex items-center justify-center gap-3 mb-3">
-          <div className="w-7 h-7 rounded-lg gradient-health flex items-center justify-center">
-            <Heart className="w-4 h-4 text-white" />
-          </div>
+          <img src="/icon-192x192.png" alt="HealthTwin" className="w-7 h-7 rounded-lg shadow" />
           <span className="text-white font-semibold">HealthTwin</span>
         </div>
         <p>© 2025 HealthTwin — Цифровой Двойник Здоровья. Платформа не заменяет медицинскую консультацию.</p>
