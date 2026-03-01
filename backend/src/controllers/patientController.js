@@ -234,17 +234,25 @@ const getNutritionLogs = async (req, res) => {
 // POST /api/patient/nutrition/analyze-menu
 const analyzeMenuPhoto = async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'Фото не загружено' });
+    const files = req.files;
+    if (!files || files.length === 0) return res.status(400).json({ error: 'Фото не загружено' });
+    const attempt = parseInt(req.body.attempt) || 1;
 
-    // ── Collect full patient health context ──────────────────────────────────
     const contextText = await buildPatientContext(req.user.id);
     if (!contextText) return res.status(404).json({ error: 'Профиль не найден' });
 
-    // ── Call AI ──────────────────────────────────────────────────────────────
-    const filePath = require('path').join(process.cwd(), 'uploads', req.user.id, req.file.filename);
-    const ext = require('path').extname(req.file.originalname || req.file.filename).toLowerCase();
-    const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
-    const base64 = fs.readFileSync(filePath).toString('base64');
+    // Build image content array for all uploaded pages
+    const imageContents = files.map(file => {
+      const filePath = path.join(process.cwd(), 'uploads', req.user.id, file.filename);
+      const ext = path.extname(file.originalname || file.filename).toLowerCase();
+      const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
+      const base64 = fs.readFileSync(filePath).toString('base64');
+      return { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}`, detail: 'high' } };
+    });
+
+    const attemptNote = attempt > 1
+      ? `\n\nВАЖНО — это попытка #${attempt}. Предложи ДРУГУЮ комбинацию блюд, менее очевидную но полезную. Не повторяй предыдущие рекомендации, предложи иные варианты из меню.`
+      : '';
 
     const ai = getAIClient();
     const completion = await ai.chat.completions.create({
@@ -253,8 +261,7 @@ const analyzeMenuPhoto = async (req, res) => {
         {
           role: 'system',
           content: `Ты — персональный нутрициолог-диетолог с медицинским образованием.
-Пациент прислал фото меню ресторана. Твоя задача — дать персонализированные рекомендации
-что заказать, основываясь на его состоянии здоровья, образе жизни и рационе питания сегодня.
+Пациент прислал фото меню ресторана (возможно несколько страниц/фото). Твоя задача — дать персонализированные рекомендации что заказать.
 
 Правила:
 1. Учитывай аллергии как абсолютные противопоказания
@@ -282,27 +289,29 @@ const analyzeMenuPhoto = async (req, res) => {
 }
 
 Если на фото не меню, верни {"error": "not_menu"}.
-Постарайся распознать максимум блюд из меню. Если текст частично нечитаем — распознай что можешь.`,
+Распознай максимум блюд со всех фото. Если текст частично нечитаем — распознай что можешь.${attemptNote}`,
         },
         {
           role: 'user',
           content: [
-            {
-              type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64}`, detail: 'high' },
-            },
+            ...imageContents,
             {
               type: 'text',
-              text: `Вот данные о пациенте:\n\n${contextText}\n\nПроанализируй меню на фото и дай персонализированные рекомендации. Верни JSON.`,
+              text: `Вот данные о пациенте:\n\n${contextText}\n\nПроанализируй меню на фото${files.length > 1 ? ` (${files.length} страниц)` : ''} и дай персонализированные рекомендации. Верни JSON.`,
             },
           ],
         },
       ],
-      max_tokens: 2000,
-      response_format: { type: 'json_object' },
+      max_tokens: 2500,
     });
 
-    const parsed = JSON.parse(completion.choices[0].message.content);
+    const rawContent = completion.choices[0].message.content;
+    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('Menu photo analysis: no JSON in response:', rawContent.slice(0, 200));
+      return res.status(422).json({ error: 'Не удалось разобрать ответ ИИ. Попробуйте снова.' });
+    }
+    const parsed = JSON.parse(jsonMatch[0]);
     if (parsed.error === 'not_menu') {
       return res.status(422).json({ error: 'На фото не обнаружено меню ресторана' });
     }
@@ -316,8 +325,9 @@ const analyzeMenuPhoto = async (req, res) => {
       balanceNote:    parsed.balanceNote    || null,
     });
   } catch (err) {
-    console.error('Menu analysis error:', err);
-    res.status(500).json({ error: 'Ошибка анализа меню' });
+    console.error('Menu photo analysis error:', err?.message || err);
+    const detail = process.env.NODE_ENV !== 'production' ? ` (${err?.message})` : '';
+    res.status(500).json({ error: `Ошибка анализа меню${detail}` });
   }
 };
 
@@ -426,7 +436,8 @@ const htmlToText = (html) => {
 // POST /api/patient/nutrition/analyze-menu-url
 const analyzeMenuUrl = async (req, res) => {
   try {
-    const { url } = req.body;
+    const { url, attempt: attemptRaw = 1 } = req.body;
+    const attempt = parseInt(attemptRaw) || 1;
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'URL не указан' });
 
     // Basic URL validation
@@ -445,7 +456,7 @@ const analyzeMenuUrl = async (req, res) => {
       });
       if (!response.ok) return res.status(422).json({ error: `Не удалось загрузить страницу (${response.status})` });
       const html = await response.text();
-      pageText = htmlToText(html).slice(0, 12000); // limit to ~12k chars
+      pageText = htmlToText(html).slice(0, 20000); // limit to ~20k chars
     } catch (fetchErr) {
       return res.status(422).json({ error: 'Не удалось открыть ссылку. Проверьте адрес или попробуйте фото.' });
     }
@@ -457,6 +468,10 @@ const analyzeMenuUrl = async (req, res) => {
     // Build patient context
     const contextText = await buildPatientContext(req.user.id);
     if (!contextText) return res.status(404).json({ error: 'Профиль пациента не найден' });
+
+    const attemptNote = attempt > 1
+      ? `\n\nВАЖНО — это попытка #${attempt}. Предложи ДРУГУЮ комбинацию блюд, менее очевидную но полезную. Не повторяй предыдущие рекомендации, предложи иные варианты из меню.`
+      : '';
 
     const ai = getAIClient();
     const completion = await ai.chat.completions.create({
@@ -494,7 +509,7 @@ const analyzeMenuUrl = async (req, res) => {
   "balanceNote": "как вписывается в дневной рацион" или null
 }
 
-Если в тексте нет меню ресторана — верни {"error": "not_menu"}.`,
+Если в тексте нет меню ресторана — верни {"error": "not_menu"}.${attemptNote}`,
         },
         {
           role: 'user',
