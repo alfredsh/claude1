@@ -200,8 +200,8 @@ export default function Nutrition() {
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" className="gap-2" onClick={() => setShowMenuModal(true)}>
             <BookOpen className="w-4 h-4" />
-            <span className="hidden sm:inline">Меню ресторана</span>
-            <span className="sm:hidden">Меню</span>
+            <span className="hidden sm:inline">Подбор из меню</span>
+            <span className="sm:hidden">Подбор</span>
           </Button>
           <Button variant="gradient" className="gap-2" onClick={() => setShowForm(!showForm)}>
             <Plus className="w-4 h-4" /> Добавить приём пищи
