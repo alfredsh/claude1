@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Utensils, Plus, TrendingUp, Camera, Loader2, Sparkles, X, ImageIcon,
-  BookOpen, CheckCircle, AlertTriangle, XCircle, Star, Flame, ChevronDown, ChevronUp, Link as LinkIcon,
+  BookOpen, CheckCircle, AlertTriangle, XCircle, Star, Flame, ChevronDown, ChevronUp, Link as LinkIcon, Upload,
 } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
@@ -49,6 +49,7 @@ export default function Nutrition() {
   const qc = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const menuInputRef = useRef<HTMLInputElement>(null)
+  const menuGalleryInputRef = useRef<HTMLInputElement>(null)
 
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -165,6 +166,7 @@ export default function Nutrition() {
     } finally {
       setMenuAnalyzing(false)
       if (menuInputRef.current) menuInputRef.current.value = ''
+      if (menuGalleryInputRef.current) menuGalleryInputRef.current.value = ''
     }
   }
 
@@ -294,7 +296,7 @@ export default function Nutrition() {
               </div>
 
               <div className="p-6 space-y-5">
-                {/* Upload area */}
+                {/* Hidden inputs */}
                 <input
                   ref={menuInputRef}
                   type="file"
@@ -303,20 +305,41 @@ export default function Nutrition() {
                   className="hidden"
                   onChange={handleMenuPhoto}
                 />
+                <input
+                  ref={menuGalleryInputRef}
+                  type="file"
+                  accept=".jpg,.jpeg,.png"
+                  className="hidden"
+                  onChange={handleMenuPhoto}
+                />
 
                 {/* ── Photo tab ── */}
                 {menuTab === 'photo' && !menuPreview && !menuAnalyzing && (
-                  <button
-                    type="button"
-                    onClick={() => menuInputRef.current?.click()}
-                    className="w-full flex flex-col items-center justify-center gap-3 py-10 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-500 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all"
-                  >
-                    <Camera className="w-10 h-10" />
-                    <div className="text-center">
-                      <p className="font-semibold text-sm">Сфотографируйте меню</p>
-                      <p className="text-xs text-slate-400 mt-1">ИИ прочитает меню и учтёт ваше состояние здоровья, активность, уже съеденное сегодня и принимаемые БАД</p>
-                    </div>
-                  </button>
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => menuInputRef.current?.click()}
+                      className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all"
+                    >
+                      <Camera className="w-8 h-8 flex-shrink-0" />
+                      <div className="text-left">
+                        <p className="font-semibold text-sm">Сфотографировать меню</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Открыть камеру и снять прямо сейчас</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => menuGalleryInputRef.current?.click()}
+                      className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all"
+                    >
+                      <Upload className="w-8 h-8 flex-shrink-0" />
+                      <div className="text-left">
+                        <p className="font-semibold text-sm">Загрузить фото из галереи</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Выбрать уже сделанное фото меню</p>
+                      </div>
+                    </button>
+                    <p className="text-xs text-slate-400 text-center pt-1">ИИ прочитает меню и учтёт ваше здоровье, активность, рацион и принимаемые БАД</p>
+                  </div>
                 )}
 
                 {/* ── URL tab ── */}
@@ -371,9 +394,15 @@ export default function Nutrition() {
                     {menuTab === 'photo' && menuPreview && (
                       <div className="flex items-center gap-3">
                         <img src={menuPreview} alt="menu" className="h-16 w-24 rounded-xl object-cover border border-slate-200 shadow-sm" />
-                        <button type="button" onClick={() => menuInputRef.current?.click()} className="text-xs text-blue-600 hover:underline">
-                          Сфотографировать другое меню
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <button type="button" onClick={() => menuInputRef.current?.click()} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                            <Camera className="w-3 h-3" /> Сфотографировать
+                          </button>
+                          <span className="text-slate-300">|</span>
+                          <button type="button" onClick={() => menuGalleryInputRef.current?.click()} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                            <Upload className="w-3 h-3" /> Загрузить другое
+                          </button>
+                        </div>
                       </div>
                     )}
                     {menuTab === 'url' && menuResult?.source && (
